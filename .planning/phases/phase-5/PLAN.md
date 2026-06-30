@@ -314,6 +314,51 @@ Result must be >= 1. If 0, re-add the .env line and re-check.
   </done>
 </task>
 
+
+<!-- ═══════════════════════════════════════════════════════════
+     TASK 5 — MCP SDK version audit (CVE — Origin validation)
+     ═══════════════════════════════════════════════════════════ -->
+<task type="auto">
+  <name>Task 5: Audit and pin MCP SDK version >= 1.24.0</name>
+  <files>package.json</files>
+
+  <action>
+STEP 1 — Check current SDK version:
+  node -e "console.log(require('./node_modules/@modelcontextprotocol/sdk/package.json').version)"
+
+STEP 2 — If version is below 1.24.0:
+  npm install @modelcontextprotocol/sdk@latest
+  npm run build
+  Confirm TypeScript still compiles with no errors.
+
+STEP 3 — Verify Origin validation is active:
+  Start server: npm run dev (in background)
+  Send a request with a bad Origin header:
+    curl -X POST http://localhost:3000/mcp \
+      -H "Origin: https://evil.example.com" \
+      -H "Content-Type: application/json" \
+      -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+  Expected: HTTP 403 response.
+  If 403 is returned, Origin validation is working.
+  If 200 is returned, SDK version is too old — upgrade and retry.
+
+STEP 4 — Record result in task summary:
+  - SDK version installed: X.Y.Z
+  - Origin rejection test: PASS or FAIL
+  - Action taken: (none / upgraded to X.Y.Z)
+  </action>
+
+  <verify>
+    <automated>node -e "const v=require('./node_modules/@modelcontextprotocol/sdk/package.json').version; const [maj,min]=v.split('.').map(Number); if(maj<1||min<24) throw new Error('SDK '+v+' is below 1.24.0 — Origin validation CVE not fixed'); console.log('SDK',v,'OK')"</automated>
+  </verify>
+
+  <done>
+    - @modelcontextprotocol/sdk version in node_modules is >= 1.24.0
+    - curl test with bad Origin returns HTTP 403
+    - package.json dependency pinned to >= 1.24.0
+  </done>
+</task>
+
 </tasks>
 
 <threat_model>

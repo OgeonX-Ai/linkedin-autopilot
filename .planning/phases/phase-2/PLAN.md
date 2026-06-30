@@ -25,20 +25,21 @@ requirements:
 
 must_haves:
   truths:
-    - "POST /sse accepts a JSON-RPC 2.0 body and returns application/json or text/event-stream"
-    - "GET /sse opens a persistent SSE stream that keeps the connection alive"
+    - "POST /mcp accepts a JSON-RPC 2.0 body and returns application/json or text/event-stream (Streamable HTTP transport)"
+    - "GET /mcp opens a persistent SSE stream that keeps the connection alive"
     - "initialize handshake returns protocolVersion: '2025-06-18', serverInfo, and capabilities"
     - "tools/list returns getProfile and postUpdate with name, description, and inputSchema"
     - "tools/call dispatches to the correct stub handler and returns a CallToolResult"
     - "GET /.well-known/oauth-protected-resource returns { resource, authorization_servers }"
     - "Unauthenticated requests receive a WWW-Authenticate: Bearer header in the response"
     - "Requests with an Origin not in ALLOWED_ORIGINS are rejected with HTTP 403"
+    - "NodeStreamableHTTPServerTransport is used (SSEServerTransport is deprecated and ChatGPT 2025-06-18 uses Streamable HTTP)"
   artifacts:
     - path: "src/mcp/server.ts"
       provides: "McpServer instance with getProfile and postUpdate stubs registered"
       exports: ["mcpServer"]
     - path: "src/routes/mcp.ts"
-      provides: "Hono route handlers for GET /sse and POST /sse wired to SSEServerTransport"
+      provides: "Hono route handlers for GET /mcp and POST /mcp wired to NodeStreamableHTTPServerTransport"
       exports: ["mcpRoutes"]
     - path: "src/middleware/origin.ts"
       provides: "Origin validation middleware — rejects unknown origins with 403"
@@ -54,8 +55,8 @@ must_haves:
   key_links:
     - from: "src/routes/mcp.ts"
       to: "src/mcp/server.ts"
-      via: "imported mcpServer passed to SSEServerTransport.connect()"
-      pattern: "SSEServerTransport"
+      via: "imported mcpServer passed to NodeStreamableHTTPServerTransport"
+      pattern: "NodeStreamableHTTPServerTransport"
     - from: "src/index.ts"
       to: "src/middleware/origin.ts"
       via: "app.use(originGuard) applied before all routes"
@@ -82,7 +83,7 @@ builds on top of. Getting the protocol layer correct now prevents costly rework 
 Output:
 - @modelcontextprotocol/sdk installed and typed
 - McpServer with two registered stub tools
-- GET /sse + POST /sse route handlers backed by SSEServerTransport
+- GET /mcp + POST /mcp route handlers backed by NodeStreamableHTTPServerTransport (Streamable HTTP — required for ChatGPT 2025-06-18)
 - Origin-guard middleware (MCP security requirement)
 - /.well-known/oauth-protected-resource discovery endpoint
 - WWW-Authenticate response header middleware
@@ -125,72 +126,88 @@ ls src/index.ts src/config.ts
 ```
 If either is missing, stop and surface the error — Phase 1 must complete first.
 
-## MCP SDK API surface (2025-06-18)
+## MCP SDK API surface (2025-06-18 — Streamable HTTP)
 
-Install: `npm install @modelcontextprotocol/sdk`
+⚠️ CRITICAL: SSEServerTransport is DEPRECATED. ChatGPT uses MCP 2025-06-18 which requires
+NodeStreamableHTTPServerTransport (Streamable HTTP). Using the old transport means ChatGPT
+will NOT connect. Use the following pattern exclusively.
+
+Install: `npm install @modelcontextprotocol/sdk zod`
+
+Must be >= 1.24.0 for Origin validation fix (CVE-level security requirement).
 
 Key classes:
 ```typescript
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
-// Create server
-const server = new McpServer({
-  name: "linkedin-mcp",
-  version: "1.0.0",
+// Create server factory (called per-request in stateless mode)
+function buildMcpServer() {
+  const server = new McpServer({
+    name: "linkedin-mcp",
+    version: "1.0.0",
+  });
+
+  // Register a tool (inputSchema derived from zod shape)
+  server.tool(
+    "toolName",
+    "Human-readable description",
+    { param: z.string().describe("What this param is") },
+    async (args) => ({
+      content: [{ type: "text", text: "result text" }],
+    })
+  );
+
+  return server;
+}
+
+// Streamable HTTP transport — handles both POST and GET on /mcp
+// sessionIdGenerator: undefined = stateless mode (simplest for MVP)
+const transport = new NodeStreamableHTTPServerTransport({
+  sessionIdGenerator: undefined,  // stateless: no session resumption
 });
 
-// Register a tool (inputSchema derived from zod shape)
-server.tool(
-  "toolName",
-  "Human-readable description",
-  { param: z.string().describe("What this param is") },
-  async (args) => ({
-    content: [{ type: "text", text: "result text" }],
-  })
-);
-
-// SSEServerTransport — one instance per connection
-// req and res are Node.js IncomingMessage / ServerResponse
-const transport = new SSEServerTransport("/sse", res);
+const server = buildMcpServer();
 await server.connect(transport);
 
-// For POST /sse — feed the incoming request into the active transport
-await transport.handlePostMessage(req, res);
+// Handle both POST (JSON-RPC requests) and GET (SSE stream)
+// in the same route handler:
+await transport.handleRequest(req, res, body);
 ```
 
-SSEServerTransport keeps a Map of active connections keyed by a session ID it writes
-into the SSE stream as the first event. The POST handler reads that session ID from
-the request (query param `sessionId`) and routes to the right transport instance.
-
-A minimal pattern for Hono with Node.js adapter:
+Hono pattern with @hono/node-server:
 
 ```typescript
-// GET /sse — open SSE stream
-mcpRouter.get("/sse", async (c) => {
-  const { req, res } = c.env as { req: IncomingMessage; res: ServerResponse };
-  const transport = new SSEServerTransport("/sse", res);
-  activeTransports.set(transport.sessionId, transport);
+import { serve } from "@hono/node-server";
+import { Hono } from "hono";
+import type { IncomingMessage, ServerResponse } from "node:http";
+
+const app = new Hono();
+
+// Both GET and POST /mcp use the same transport handler
+app.all("/mcp", async (c) => {
+  // Access raw Node.js req/res via context
+  const rawReq = c.env?.incoming as IncomingMessage;
+  const rawRes = c.env?.outgoing as ServerResponse;
+
+  const transport = new NodeStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+  });
+  const mcpServer = buildMcpServer();
   await mcpServer.connect(transport);
-  // connection stays open until client disconnects
+
+  // Parse body for POST requests
+  const body = c.req.method === "POST" ? await c.req.json() : undefined;
+  await transport.handleRequest(rawReq, rawRes, body);
 });
 
-// POST /sse — receive JSON-RPC message
-mcpRouter.post("/sse", async (c) => {
-  const sessionId = c.req.query("sessionId");
-  const transport = activeTransports.get(sessionId);
-  if (!transport) return c.json({ error: "No active SSE session" }, 400);
-  const { req, res } = c.env as { req: IncomingMessage; res: ServerResponse };
-  await transport.handlePostMessage(req, res);
-});
+serve({ fetch: app.fetch, port: config.PORT });
 ```
 
-Note: Hono's `c.req` and `c.res` are Hono wrappers. For SSEServerTransport you need
-the raw Node.js `IncomingMessage` and `ServerResponse`. With `@hono/node-server` these
-are available via the `upgrade` or via `c.env`. Check the installed adapter version —
-the pattern may use `getConnInfo` or `getRawContext`. Prefer the pattern that the
-installed adapter documents; do not assume a specific API — read the adapter types first.
+Note: With @hono/node-server, raw IncomingMessage/ServerResponse are accessible via
+c.env.incoming / c.env.outgoing. Verify property names by checking the installed
+adapter's TypeScript types before assuming field names.
 </context>
 
 <tasks>
