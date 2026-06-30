@@ -14,14 +14,16 @@ const envSchema = z.object({
     .pipe(z.number().int().min(1).max(65535)),
   ALLOWED_ORIGINS: z
     .string()
-    .optional()
-    .default("http://localhost:3000")
+    .min(1, "ALLOWED_ORIGINS is required (comma-separated list of allowed origins)")
     .transform((v) =>
       v
         .split(",")
         .map((o) => o.trim())
         .filter(Boolean)
     ),
+  SERVER_URL: z
+    .string()
+    .url("SERVER_URL must be a valid URL (e.g. https://your-ngrok-url.ngrok.io)"),
 });
 
 const result = envSchema.safeParse(process.env);
