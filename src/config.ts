@@ -3,6 +3,11 @@ import { z } from "zod";
 const envSchema = z.object({
   LINKEDIN_CLIENT_ID: z.string().min(1, "LINKEDIN_CLIENT_ID is required"),
   LINKEDIN_CLIENT_SECRET: z.string().min(1, "LINKEDIN_CLIENT_SECRET is required"),
+  LINKEDIN_REDIRECT_URI: z
+    .string()
+    .url("LINKEDIN_REDIRECT_URI must be a valid URL (e.g. http://localhost:3000/auth/callback)")
+    .optional()
+    .default("http://localhost:3000/auth/callback"),
   SESSION_SECRET: z
     .string()
     .min(32, "SESSION_SECRET must be at least 32 characters (use a random secret)"),

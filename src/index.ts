@@ -6,6 +6,7 @@ import { originGuard } from "./middleware/origin.js";
 import { authChallenge } from "./middleware/auth-challenge.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { wellKnownRoutes } from "./routes/well-known.js";
+import { authRoutes } from "./routes/auth.js";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -18,7 +19,11 @@ app.use("*", authChallenge);
 // Health check (Phase 1 — do not remove)
 app.get("/health", (c) => c.json({ status: "ok" }));
 
+// LinkedIn OAuth routes (Phase 3 — unauthenticated, must be registered BEFORE requireAuth)
+app.route("/auth", authRoutes);
+
 // MCP Streamable HTTP protocol endpoints (Phase 2 — GET+POST /mcp)
+// requireAuth is applied inside mcpRoutes on the tools/call path (see routes/mcp.ts)
 app.route("/", mcpRoutes);
 
 // OAuth Protected Resource discovery (Phase 2 — MCP-07)
@@ -31,9 +36,9 @@ serve(
   },
   (info) => {
     console.log(
-      `[server] LinkedIn MCP server running on http://localhost:${info.port}`
+      `[server] LinkedIn MCP server running on http://localhost:${info.port}`,
     );
-  }
+  },
 );
 
 export { app };

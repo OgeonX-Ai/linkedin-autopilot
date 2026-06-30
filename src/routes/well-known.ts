@@ -9,6 +9,6 @@ export const wellKnownRoutes = new Hono();
 wellKnownRoutes.get("/oauth-protected-resource", (c) => {
   return c.json({
     resource: config.SERVER_URL,
-    authorization_servers: ["https://www.linkedin.com/oauth"],
+    authorization_servers: [config.SERVER_URL],
   });
 });
