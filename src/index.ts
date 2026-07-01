@@ -9,6 +9,7 @@ import { sanitizeErrors } from "./middleware/sanitize-errors.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { wellKnownRoutes } from "./routes/well-known.js";
 import { authRoutes } from "./routes/auth.js";
+import { oauthRoutes } from "./routes/oauth.js";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -21,8 +22,11 @@ app.use("*", authChallenge);
 // Health check (Phase 1 — do not remove)
 app.get("/health", (c) => c.json({ status: "ok" }));
 
-// LinkedIn OAuth routes (Phase 3 — unauthenticated, must be registered BEFORE requireAuth)
+// LinkedIn OAuth routes (browser flow — unauthenticated)
 app.route("/auth", authRoutes);
+
+// OAuth AS routes for ChatGPT (authorize + token)
+app.route("/oauth", oauthRoutes);
 
 // MCP Streamable HTTP protocol endpoints (Phase 2 — GET+POST /mcp)
 // requireAuth is applied inside mcpRoutes on the tools/call path (see routes/mcp.ts)

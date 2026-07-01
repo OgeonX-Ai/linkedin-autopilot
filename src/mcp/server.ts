@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getProfileHandler } from "../tools/get-profile.js";
 import { postUpdateHandler } from "../tools/post-update.js";
+import { getRecentCommitsHandler } from "../tools/get-recent-commits.js";
 import { sessionStore } from "../auth/session.js";
 import type { SessionData } from "../auth/session.js";
 
@@ -48,6 +49,29 @@ export function buildMcpServer(sessionId: string = ""): McpServer {
         ...(session.linkedinSub !== undefined ? { linkedinSub: session.linkedinSub } : {}),
       };
       return postUpdateHandler({ text }, sessionArg);
+    },
+  );
+
+  server.tool(
+    "getRecentCommits",
+    "Get recent git commits from a local repository. Returns commit messages, authors, dates, and changed files. Use this to compose a LinkedIn post about what you've been building.",
+    {
+      repoPath: z
+        .string()
+        .optional()
+        .describe("Absolute path to the git repository (defaults to the MCP server's working directory)"),
+      count: z
+        .number()
+        .int()
+        .min(1)
+        .max(20)
+        .optional()
+        .describe("Number of recent commits to fetch (1–20, default 5)"),
+    },
+    async ({ repoPath, count }) => {
+      const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
+      const sessionArg = session.accessToken !== undefined ? { accessToken: session.accessToken } : {};
+      return getRecentCommitsHandler({ repoPath, count }, sessionArg);
     },
   );
 
