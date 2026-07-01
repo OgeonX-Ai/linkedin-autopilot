@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { loadSessions, saveSessions } from "./auth/session-persist.js";
+import { loadUserRegistry } from "./auth/user-registry.js";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import type { HttpBindings } from "@hono/node-server";
@@ -12,9 +13,12 @@ import { wellKnownRoutes } from "./routes/well-known.js";
 import { authRoutes } from "./routes/auth.js";
 import { oauthRoutes } from "./routes/oauth.js";
 import { routineRoutes } from "./routes/routine.js";
+import { landingRoutes } from "./routes/landing.js";
+import { adminRoutes } from "./routes/admin.js";
 
-// Load persisted sessions from disk (survives server restarts)
+// Load persisted data from disk (survives server restarts)
 loadSessions();
+loadUserRegistry();
 // Save sessions every 5 minutes and on exit
 setInterval(saveSessions, 5 * 60 * 1000).unref();
 process.on("SIGINT", () => { saveSessions(); process.exit(0); });
@@ -30,6 +34,12 @@ app.use("*", authChallenge);
 
 // Health check (Phase 1 — do not remove)
 app.get("/health", (c) => c.json({ status: "ok" }));
+
+// Landing page (must be before mcpRoutes to capture GET /)
+app.route("/", landingRoutes);
+
+// Admin dashboard
+app.route("/admin", adminRoutes);
 
 // LinkedIn OAuth routes (browser flow — unauthenticated)
 app.route("/auth", authRoutes);

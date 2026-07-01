@@ -52,6 +52,8 @@ interface RawTokenResponse {
 
 interface UserInfoResponse {
   sub: string;
+  name?: string;
+  email?: string;
   [key: string]: unknown;
 }
 
@@ -61,10 +63,15 @@ interface UserInfoResponse {
  *
  * Security: raw response bodies and client_secret are NEVER passed to any logger.
  */
+export interface ExchangeCodeResult extends Omit<SessionData, "oauthState"> {
+  linkedinName?: string;
+  linkedinEmail?: string;
+}
+
 export async function exchangeCode(
   code: string,
   redirectUri?: string,
-): Promise<Omit<SessionData, "oauthState">> {
+): Promise<ExchangeCodeResult> {
   const tokenRes = await fetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -97,11 +104,18 @@ export async function exchangeCode(
 
   const userinfo = (await userInfoRes.json()) as UserInfoResponse;
 
-  const result: Omit<SessionData, "oauthState"> = {
+  const result: ExchangeCodeResult = {
     accessToken: data.access_token,
     expiresAt: Date.now() + data.expires_in * 1000,
     linkedinSub: userinfo["sub"],
   };
+
+  if (userinfo.name !== undefined) {
+    result.linkedinName = userinfo.name;
+  }
+  if (userinfo.email !== undefined) {
+    result.linkedinEmail = userinfo.email;
+  }
 
   // refreshToken is optional — LinkedIn may not issue one for this app tier
   if (data.refresh_token !== undefined) {

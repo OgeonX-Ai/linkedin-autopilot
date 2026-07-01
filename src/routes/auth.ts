@@ -22,6 +22,7 @@ import {
   destroySession,
 } from "../auth/cookie.js";
 import { sessionStore } from "../auth/session.js";
+import { registerUser, saveUserRegistry } from "../auth/user-registry.js";
 import crypto from "node:crypto";
 
 export const authRoutes = new Hono();
@@ -114,6 +115,14 @@ authRoutes.get("/callback", async (c) => {
 
     if (sessionId) {
       setSession(c, sessionId, updatedSession);
+      // Register / update user record
+      registerUser(
+        tokens.linkedinSub,
+        tokens.linkedinName ?? "",
+        tokens.linkedinEmail ?? "",
+        sessionId,
+      );
+      saveUserRegistry();
     }
 
     return c.json({ ok: true, sub: tokens.linkedinSub });

@@ -12,6 +12,10 @@ export interface SessionData {
   expiresAt: number;
   /** "sub" claim from LinkedIn userinfo (urn:li:person base sub value) */
   linkedinSub: string;
+  /** Display name from LinkedIn userinfo */
+  linkedinName?: string;
+  /** Email address from LinkedIn userinfo */
+  linkedinEmail?: string;
   /** Ephemeral CSRF token; deleted (set to undefined) after callback validates it */
   oauthState?: string;
 }

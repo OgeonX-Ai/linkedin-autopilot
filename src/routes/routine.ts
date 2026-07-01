@@ -35,6 +35,8 @@ routineRoutes.get("/token", (c) => {
   return c.json({
     token: jwt,
     expires_in_days: 30,
+    linkedinSub: session.linkedinSub,
+    linkedinName: session.linkedinName ?? null,
     usage: `Add this as Authorization: Bearer <token> when calling /routine/post-ai-news`,
   });
 });
