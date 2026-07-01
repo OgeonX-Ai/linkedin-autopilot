@@ -1,8 +1,18 @@
 # OgeonX LinkedIn Autopilot
 
-> Automate your LinkedIn presence via ChatGPT — post AI news, thought leadership, articles, and job listings automatically.
+> Automate your LinkedIn presence with any AI — post AI news, thought leadership, articles, and job listings automatically.
 
-Built on the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) — ChatGPT connects to this server and can post to LinkedIn on your behalf, search jobs, and run scheduled content routines.
+Built on the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) — connect any modern AI agent to LinkedIn and let it post, search jobs, and run scheduled content routines on your behalf.
+
+## Works with all major AI platforms
+
+| Platform | Protocol | Auth | Setup |
+|----------|----------|------|-------|
+| **Claude Code** (Anthropic) | HTTP `/routine/*` | Bearer JWT | [Claude setup →](#claude-code-routines) |
+| **OpenAI Codex** | MCP Streamable HTTP | OAuth 2.0 | [Codex setup →](#openai-codex) |
+| **Google Agentspace** | MCP + OpenAPI | API Key | [Agentspace setup →](#google-agentspace) |
+| **ChatGPT Custom GPTs** | MCP Streamable HTTP | OAuth 2.0 | [ChatGPT setup →](docs/CHATGPT_SETUP.md) |
+| **n8n / Zapier / Make** | REST `/routine/*` | API Key | Set `X-API-Key` header |
 
 ---
 
@@ -163,6 +173,66 @@ with header Authorization: Bearer YOUR_TOKEN
 
 ---
 
+## Claude Code routines
+
+The three routines shown in your Claude Code sidebar call the server's HTTP endpoints directly with a Bearer JWT — no MCP overhead needed.
+
+**Setup:**
+1. Visit `https://YOUR_TUNNEL_URL/auth/login` → authorize LinkedIn
+2. Visit `https://YOUR_TUNNEL_URL/routine/token` → copy the 30-day JWT
+3. In Claude Code → Routines → New routine, set prompt:
+```
+POST https://YOUR_TUNNEL_URL/routine/post-ai-news
+Authorization: Bearer YOUR_JWT_TOKEN
+```
+
+**Recommended schedule:**
+- Monday 10:00 EET — AI news
+- Wednesday 11:00 EET — Thought leadership
+- Friday 10:00 EET — Weekly roundup
+
+---
+
+## OpenAI Codex
+
+Codex CLI supports MCP servers natively. Add this to your Codex config (`~/.codex/config.yaml`):
+
+```yaml
+mcpServers:
+  linkedin-autopilot:
+    type: sse
+    url: https://YOUR_TUNNEL_URL/mcp
+    headers:
+      Authorization: Bearer YOUR_JWT_TOKEN
+```
+
+Then use it:
+```bash
+codex "Post today's AI news to my LinkedIn"
+codex "Search for senior DevOps jobs in Helsinki"
+codex "Write a thought leadership post about AI trends in Finland"
+```
+
+---
+
+## Google Agentspace
+
+Google Agentspace reads the OpenAPI spec and calls the REST endpoints directly.
+
+**Setup:**
+1. Generate an API key:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+2. Add to `.env`: `API_KEYS=your-generated-key`
+3. In Google Agentspace → Add connector:
+   - OpenAPI URL: `https://YOUR_TUNNEL_URL/openapi.json`
+   - Auth: API Key → Header `X-API-Key` → paste your key
+
+Agentspace can then trigger all 5 routine endpoints via natural language.
+
+---
+
 ## Multi-user / SaaS mode
 
 Anyone can self-onboard:
@@ -252,6 +322,20 @@ src/
 | `LINKEDIN_REDIRECT_URI` | ✅ | Must be `SERVER_URL/auth/callback` |
 | `ALLOWED_ORIGINS` | — | Comma-separated CORS origins (default: `https://chatgpt.com`) |
 | `ADMIN_SECRET` | — | Enables `/admin/users` endpoint |
+| `API_KEYS` | — | Comma-separated pre-shared keys for Google Agentspace / n8n / Zapier |
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to add tools, code style, PR checklist |
+| [SECURITY.md](SECURITY.md) | Security model, token handling, incident response |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System diagram, OAuth flow, session lifecycle |
+| [docs/CHATGPT_SETUP.md](docs/CHATGPT_SETUP.md) | Step-by-step ChatGPT Custom GPT setup |
+| [docs/LINKEDIN_STRATEGY.md](docs/LINKEDIN_STRATEGY.md) | Algorithm 2026, customer acquisition, job search |
+| [docs/iso27001/](docs/iso27001/) | ISO 27001 ISMS — risk register, controls, incident response |
 
 ---
 
