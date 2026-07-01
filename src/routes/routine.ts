@@ -9,6 +9,8 @@ import { verifyJwt, signJwt } from "../auth/jwt.js";
 import { sessionStore } from "../auth/session.js";
 import { getSession, getSessionId } from "../auth/cookie.js";
 import { postAINewsHandler } from "../tools/post-ai-news.js";
+import { postThoughtLeadershipHandler } from "../tools/post-thought-leadership.js";
+import { postWeeklyRoundupHandler } from "../tools/post-weekly-roundup.js";
 
 export const routineRoutes = new Hono();
 
@@ -58,5 +60,29 @@ routineRoutes.post("/post-ai-news", async (c) => {
     linkedinSub: session.linkedinSub,
   });
 
+  return c.json({ ok: !result.isError, message: result.content[0]?.text ?? "" });
+});
+
+/** POST /routine/post-thought-leadership — Wednesday engagement post */
+routineRoutes.post("/post-thought-leadership", async (c) => {
+  const authHeader = c.req.header("authorization");
+  if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
+  const claims = verifyJwt(authHeader.slice(7));
+  if (!claims) return c.json({ error: "Invalid or expired token" }, 401);
+  const session = sessionStore.get(claims.sub);
+  if (!session?.accessToken || !session.linkedinSub) return c.json({ error: "No active session" }, 401);
+  const result = await postThoughtLeadershipHandler({}, { accessToken: session.accessToken, linkedinSub: session.linkedinSub });
+  return c.json({ ok: !result.isError, message: result.content[0]?.text ?? "" });
+});
+
+/** POST /routine/post-weekly-roundup — Friday roundup */
+routineRoutes.post("/post-weekly-roundup", async (c) => {
+  const authHeader = c.req.header("authorization");
+  if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
+  const claims = verifyJwt(authHeader.slice(7));
+  if (!claims) return c.json({ error: "Invalid or expired token" }, 401);
+  const session = sessionStore.get(claims.sub);
+  if (!session?.accessToken || !session.linkedinSub) return c.json({ error: "No active session" }, 401);
+  const result = await postWeeklyRoundupHandler({}, { accessToken: session.accessToken, linkedinSub: session.linkedinSub });
   return c.json({ ok: !result.isError, message: result.content[0]?.text ?? "" });
 });

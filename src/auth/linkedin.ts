@@ -63,6 +63,7 @@ interface UserInfoResponse {
  */
 export async function exchangeCode(
   code: string,
+  redirectUri?: string,
 ): Promise<Omit<SessionData, "oauthState">> {
   const tokenRes = await fetch(TOKEN_URL, {
     method: "POST",
@@ -70,7 +71,7 @@ export async function exchangeCode(
     body: new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: config.LINKEDIN_REDIRECT_URI,
+      redirect_uri: redirectUri ?? config.LINKEDIN_REDIRECT_URI,
       client_id: config.LINKEDIN_CLIENT_ID,
       client_secret: config.LINKEDIN_CLIENT_SECRET,
     }),

@@ -4,6 +4,9 @@ import { getProfileHandler } from "../tools/get-profile.js";
 import { postUpdateHandler } from "../tools/post-update.js";
 import { getRecentCommitsHandler } from "../tools/get-recent-commits.js";
 import { postAINewsHandler } from "../tools/post-ai-news.js";
+import { postArticleHandler } from "../tools/post-article.js";
+import { postThoughtLeadershipHandler } from "../tools/post-thought-leadership.js";
+import { postWeeklyRoundupHandler } from "../tools/post-weekly-roundup.js";
 import { sessionStore } from "../auth/session.js";
 import type { SessionData } from "../auth/session.js";
 
@@ -87,6 +90,52 @@ export function buildMcpServer(sessionId: string = ""): McpServer {
         ...(session.linkedinSub !== undefined ? { linkedinSub: session.linkedinSub } : {}),
       };
       return postAINewsHandler({}, sessionArg);
+    },
+  );
+
+  server.tool(
+    "postThoughtLeadership",
+    "Post a thought-leadership insight about AI trends to LinkedIn. Fetches a recent news item for context and composes an opinion-style post with a closing question to drive comments.",
+    {},
+    async () => {
+      const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
+      const sessionArg = {
+        ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(session.linkedinSub !== undefined ? { linkedinSub: session.linkedinSub } : {}),
+      };
+      return postThoughtLeadershipHandler({}, sessionArg);
+    },
+  );
+
+  server.tool(
+    "postWeeklyRoundup",
+    "Post a weekly AI news roundup to LinkedIn — curates top 5 stories from multiple sources into a save-worthy summary post. Best posted on Fridays.",
+    {},
+    async () => {
+      const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
+      const sessionArg = {
+        ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(session.linkedinSub !== undefined ? { linkedinSub: session.linkedinSub } : {}),
+      };
+      return postWeeklyRoundupHandler({}, sessionArg);
+    },
+  );
+
+  server.tool(
+    "postArticle",
+    "Post a long-form article to LinkedIn. Provide a title and body — the server formats it with hashtags and posts it. Articles live permanently on the profile and are indexed by Google.",
+    {
+      title: z.string().min(1).max(150).describe("Article headline"),
+      body: z.string().min(50).max(2800).describe("Article body text"),
+      topic: z.string().optional().describe("Topic hint for hashtags: ai, tech, startup, or future"),
+    },
+    async ({ title, body, topic }) => {
+      const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
+      const sessionArg = {
+        ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(session.linkedinSub !== undefined ? { linkedinSub: session.linkedinSub } : {}),
+      };
+      return postArticleHandler({ title, body, topic }, sessionArg);
     },
   );
 
