@@ -4,6 +4,7 @@ import type { HttpBindings } from "@hono/node-server";
 import { config } from "./config.js";
 import { originGuard } from "./middleware/origin.js";
 import { authChallenge } from "./middleware/auth-challenge.js";
+import { sanitizeErrors } from "./middleware/sanitize-errors.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { wellKnownRoutes } from "./routes/well-known.js";
 import { authRoutes } from "./routes/auth.js";
@@ -28,6 +29,9 @@ app.route("/", mcpRoutes);
 
 // OAuth Protected Resource discovery (Phase 2 — MCP-07)
 app.route("/.well-known", wellKnownRoutes);
+
+// Error sanitization — must be registered AFTER all routes
+app.onError(sanitizeErrors);
 
 serve(
   {

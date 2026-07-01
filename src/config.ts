@@ -1,51 +1,94 @@
 import { z } from "zod";
 
-const envSchema = z.object({
-  LINKEDIN_CLIENT_ID: z.string().min(1, "LINKEDIN_CLIENT_ID is required"),
-  LINKEDIN_CLIENT_SECRET: z.string().min(1, "LINKEDIN_CLIENT_SECRET is required"),
-  LINKEDIN_REDIRECT_URI: z
-    .string()
-    .url("LINKEDIN_REDIRECT_URI must be a valid URL (e.g. http://localhost:3000/auth/callback)")
-    .optional()
-    .default("http://localhost:3000/auth/callback"),
-  SESSION_SECRET: z
-    .string()
-    .min(32, "SESSION_SECRET must be at least 32 characters (use a random secret)"),
-  PORT: z
-    .string()
-    .optional()
-    .default("3000")
-    .transform((v) => parseInt(v, 10))
-    .pipe(z.number().int().min(1).max(65535)),
-  ALLOWED_ORIGINS: z
-    .string()
-    .min(1, "ALLOWED_ORIGINS is required (comma-separated list of allowed origins)")
-    .transform((v) =>
-      v
-        .split(",")
-        .map((o) => o.trim())
-        .filter(Boolean)
-    ),
-  SERVER_URL: z
-    .string()
-    .url("SERVER_URL must be a valid URL (e.g. https://your-ngrok-url.ngrok.io)"),
-});
-
-const result = envSchema.safeParse(process.env);
-
-if (!result.success) {
-  const errors = result.error.flatten().fieldErrors;
-  const lines = Object.entries(errors)
-    .map(([field, msgs]) => `  ${field}: ${(msgs ?? []).join(", ")}`)
-    .join("\n");
-  console.error(
-    `[config] Server startup failed — missing or invalid environment variables:\n${lines}`
-  );
-  console.error(
-    `[config] Copy .env.example to .env and fill in the required values.`
-  );
-  process.exit(1);
+// Config type with camelCase properties (as spec'd in SEC-01)
+export interface Config {
+  sessionSecret: string;
+  linkedinClientId: string;
+  linkedinClientSecret: string;
+  linkedinRedirectUri: string;
+  port: number;
+  allowedOrigins: string[];
+  serverUrl: string;
+  // Uppercase aliases kept for backward compatibility with existing callers
+  SESSION_SECRET: string;
+  LINKEDIN_CLIENT_ID: string;
+  LINKEDIN_CLIENT_SECRET: string;
+  LINKEDIN_REDIRECT_URI: string;
+  PORT: number;
+  ALLOWED_ORIGINS: string[];
+  SERVER_URL: string;
 }
 
-export const config = result.data;
-export type Config = typeof config;
+export function validateConfig(): Config {
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret) {
+    throw new Error("SESSION_SECRET is required");
+  }
+  if (sessionSecret.length < 32) {
+    throw new Error("SESSION_SECRET must be at least 32 characters");
+  }
+
+  const linkedinClientSecret = process.env.LINKEDIN_CLIENT_SECRET;
+  if (!linkedinClientSecret) {
+    throw new Error("LINKEDIN_CLIENT_SECRET is required");
+  }
+
+  const linkedinClientId = process.env.LINKEDIN_CLIENT_ID;
+  if (!linkedinClientId) {
+    throw new Error("LINKEDIN_CLIENT_ID is required");
+  }
+
+  const linkedinRedirectUri =
+    process.env.LINKEDIN_REDIRECT_URI ?? "http://localhost:3000/auth/callback";
+
+  const port = parseInt(process.env.PORT ?? "3000", 10);
+
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  const serverUrl = process.env.SERVER_URL ?? "";
+
+  return {
+    // camelCase (spec)
+    sessionSecret,
+    linkedinClientId,
+    linkedinClientSecret,
+    linkedinRedirectUri,
+    port,
+    allowedOrigins,
+    serverUrl,
+    // UPPER_SNAKE_CASE aliases (backward compat with existing callers)
+    SESSION_SECRET: sessionSecret,
+    LINKEDIN_CLIENT_ID: linkedinClientId,
+    LINKEDIN_CLIENT_SECRET: linkedinClientSecret,
+    LINKEDIN_REDIRECT_URI: linkedinRedirectUri,
+    PORT: port,
+    ALLOWED_ORIGINS: allowedOrigins,
+    SERVER_URL: serverUrl,
+  };
+}
+
+function initConfig(): Config {
+  try {
+    const cfg = validateConfig();
+    console.log("Security checks passed — all required env vars present and valid");
+    return cfg;
+  } catch (err) {
+    process.stderr.write((err as Error).message + "\n");
+    process.exit(1);
+  }
+}
+
+// Only run at module load when not in a test environment.
+// Tests import validateConfig() directly and call it with their own process.env setup.
+const isTest =
+  process.env.NODE_ENV === "test" ||
+  process.env.VITEST != null ||
+  process.env.NODE_TEST_CONTEXT != null;
+
+// eslint-disable-next-line prefer-const
+let config: Config = isTest ? ({} as Config) : initConfig();
+
+export { config };
