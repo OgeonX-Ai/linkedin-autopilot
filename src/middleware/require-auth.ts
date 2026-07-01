@@ -8,6 +8,7 @@
  */
 
 import type { MiddlewareHandler, Context } from "hono";
+import type { HttpBindings } from "@hono/node-server";
 import { getSession, getSessionId, setSession, destroySession } from "../auth/cookie.js";
 import { refreshAccessToken, OAuthError } from "../auth/linkedin.js";
 import { config } from "../config.js";
@@ -20,20 +21,18 @@ import { config } from "../config.js";
  * Extract the JSON-RPC `id` from a pre-parsed request body.
  * Returns null for notifications or if the body is not JSON-RPC.
  */
-function requestId(c: Context): string | number | null {
-  try {
-    const body = c.get("body" as never) as Record<string, unknown> | undefined;
-    if (!body) return null;
-    const id = body["id"];
-    if (typeof id === "string" || typeof id === "number") return id;
-    return null;
-  } catch {
-    return null;
-  }
+type McpContext = Context<{ Bindings: HttpBindings; Variables: { parsedBody: unknown } }>;
+
+function requestId(c: McpContext): string | number | null {
+  const body = c.get("parsedBody") as Record<string, unknown> | undefined;
+  if (!body) return null;
+  const id = body["id"];
+  if (typeof id === "string" || typeof id === "number") return id;
+  return null;
 }
 
 /** Build a JSON-RPC -32001 auth error response (HTTP 200 so ChatGPT reads the body). */
-function mcpAuthError(c: Context, id: string | number | null): Response {
+function mcpAuthError(c: McpContext, id: string | number | null): Response {
   return c.json(
     {
       jsonrpc: "2.0",
@@ -51,7 +50,7 @@ function mcpAuthError(c: Context, id: string | number | null): Response {
 // Middleware
 // ---------------------------------------------------------------------------
 
-export const requireAuth: MiddlewareHandler = async (c, next) => {
+export const requireAuth: MiddlewareHandler<{ Bindings: HttpBindings; Variables: { parsedBody: unknown } }> = async (c, next) => {
   const session = getSession(c);
   const id = requestId(c);
 

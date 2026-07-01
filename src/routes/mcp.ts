@@ -7,7 +7,9 @@ import type { HttpBindings } from "@hono/node-server";
 import { requireAuth } from "../middleware/require-auth.js";
 import { getSessionId } from "../auth/cookie.js";
 
-export const mcpRoutes = new Hono<{ Bindings: HttpBindings }>();
+type McpEnv = { Bindings: HttpBindings; Variables: { parsedBody: unknown } };
+
+export const mcpRoutes = new Hono<McpEnv>();
 
 // Both GET and POST /mcp are handled by the same Streamable HTTP transport
 // GET opens a persistent SSE stream; POST handles JSON-RPC requests
@@ -39,7 +41,7 @@ mcpRoutes.all("/mcp", async (c) => {
 
   if (isToolsCall) {
     // Cache parsed body so requireAuth helper can read the JSON-RPC id
-    c.set("body" as never, body);
+    c.set("parsedBody", body);
 
     let authPassed = false;
     const authResponse = await requireAuth(c, async () => {
