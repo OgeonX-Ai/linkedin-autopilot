@@ -50,9 +50,9 @@ async function fetchTopStories(): Promise<NewsItem[]> {
 
 export async function postWeeklyRoundupHandler(
   _args: Record<string, unknown>,
-  session: { accessToken?: string; linkedinSub?: string },
+  session: { accessToken?: string; linkedinSub?: string; orgId?: string },
 ): Promise<{ isError: boolean; content: Array<{ type: "text"; text: string }> }> {
-  if (!session.accessToken || !session.linkedinSub) {
+  if (!session.accessToken || (!session.linkedinSub && !session.orgId)) {
     return {
       isError: true,
       content: [{ type: "text", text: "Not authenticated." }],
@@ -71,33 +71,51 @@ export async function postWeeklyRoundupHandler(
     `${i + 1}. ${s.title}\n   ${s.description.slice(0, 100)}${s.description.length > 100 ? "..." : ""}`,
   ).join("\n\n");
 
-  const text = [
-    `🗓️ Weekly AI Roundup — What Mattered This Week`,
-    ``,
-    `Here are the stories shaping the AI landscape right now:`,
-    ``,
-    storyLines,
-    ``,
-    `---`,
-    `The pace of change in AI is unlike anything we've seen in tech before.`,
-    `Which of these stories do you think will have the biggest long-term impact?`,
-    ``,
-    `Save this post to review your AI news in one place. 📌`,
-    ``,
-    `#AI #WeeklyRoundup #ArtificialIntelligence #TechNews #Finland #Innovation #MachineLearning`,
-  ].join("\n").slice(0, 3000);
+  const finalText = session.orgId
+    ? [
+        `🗓️ OgeonX AI Weekly: Top AI Stories This Week`,
+        ``,
+        `Here's what shaped the AI landscape this week:`,
+        ``,
+        storyLines,
+        ``,
+        `---`,
+        `Which of these will have the biggest long-term impact on your industry?`,
+        ``,
+        `Follow OgeonX AI for weekly AI roundups — curated and posted automatically. 📌`,
+        ``,
+        `#OgeonXAI #AI #WeeklyRoundup #ArtificialIntelligence #TechNews #LinkedInAutomation`,
+      ].join("\n").slice(0, 3000)
+    : [
+        `🗓️ Weekly AI Roundup — What Mattered This Week`,
+        ``,
+        `Here are the stories shaping the AI landscape right now:`,
+        ``,
+        storyLines,
+        ``,
+        `---`,
+        `The pace of change in AI is unlike anything we've seen in tech before.`,
+        `Which of these stories do you think will have the biggest long-term impact?`,
+        ``,
+        `Save this post to review your AI news in one place. 📌`,
+        ``,
+        `#AI #WeeklyRoundup #ArtificialIntelligence #TechNews #Finland #Innovation #MachineLearning`,
+      ].join("\n").slice(0, 3000);
 
-  const authorUrn = `urn:li:person:${session.linkedinSub}`;
+  const authorUrn = session.orgId
+    ? `urn:li:organization:${session.orgId}`
+    : `urn:li:person:${session.linkedinSub}`;
   const client = new LinkedInClient();
 
   try {
-    const post = await client.createPost(session.accessToken, authorUrn, text);
+    const post = await client.createPost(session.accessToken, authorUrn, finalText);
     return {
       isError: false,
       content: [{
         type: "text",
         text: `✅ Weekly roundup posted!\n${stories.length} stories covered.\nURL: ${post.postUrl}`,
       }],
+
     };
   } catch (err) {
     const message = err instanceof LinkedInApiError ? err.message : "Unexpected error.";

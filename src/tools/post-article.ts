@@ -52,9 +52,9 @@ function formatArticle(input: ArticleInput): string {
 
 export async function postArticleHandler(
   args: { title?: string; body?: string; topic?: string; sourceUrl?: string },
-  session: { accessToken?: string; linkedinSub?: string },
+  session: { accessToken?: string; linkedinSub?: string; orgId?: string },
 ): Promise<{ isError: boolean; content: Array<{ type: "text"; text: string }> }> {
-  if (!session.accessToken || !session.linkedinSub) {
+  if (!session.accessToken || (!session.linkedinSub && !session.orgId)) {
     return {
       isError: true,
       content: [{ type: "text", text: "Not authenticated. Visit /auth/login to connect LinkedIn." }],
@@ -72,7 +72,9 @@ export async function postArticleHandler(
     };
   }
 
-  const authorUrn = `urn:li:person:${session.linkedinSub}`;
+  const authorUrn = session.orgId
+    ? `urn:li:organization:${session.orgId}`
+    : `urn:li:person:${session.linkedinSub}`;
   const client = new LinkedInClient();
 
   try {

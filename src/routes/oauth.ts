@@ -50,7 +50,7 @@ oauthRoutes.get("/authorize", (c) => {
     response_type: "code",
     client_id: config.LINKEDIN_CLIENT_ID,
     redirect_uri: oauthCallbackUri,
-    scope: "openid profile email w_member_social w_organization_social r_organization_social",
+    scope: "openid profile email w_member_social w_organization_social r_organization_social rw_organization_admin",
     state: linkedinState,
   });
   const linkedinAuthUrl = `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`;

@@ -62,11 +62,27 @@ function composePost(item: NewsItem): string {
   return lines.join("\n").slice(0, 3000);
 }
 
+function composePostCompany(item: NewsItem): string {
+  const lines = [
+    `🤖 OgeonX AI Daily: ${item.title}`,
+    "",
+    item.description ? `${item.description.slice(0, 220)}...` : "",
+    "",
+    `📰 Source: ${item.link}`,
+    "",
+    "---",
+    "Follow OgeonX AI for daily AI news — curated and posted automatically.",
+    "",
+    "#OgeonXAI #AI #ArtificialIntelligence #TechNews #MachineLearning #LinkedInAutomation",
+  ].filter((l, i, arr) => !(l === "" && arr[i - 1] === ""));
+  return lines.join("\n").slice(0, 3000);
+}
+
 export async function postAINewsHandler(
   _args: Record<string, unknown>,
-  session: { accessToken?: string; linkedinSub?: string },
+  session: { accessToken?: string; linkedinSub?: string; orgId?: string },
 ): Promise<{ isError: boolean; content: Array<{ type: "text"; text: string }> }> {
-  if (!session.accessToken || !session.linkedinSub) {
+  if (!session.accessToken || (!session.linkedinSub && !session.orgId)) {
     return {
       isError: true,
       content: [{ type: "text", text: "Not authenticated. Visit /oauth/authorize to connect LinkedIn." }],
@@ -93,8 +109,10 @@ export async function postAINewsHandler(
 
   // Pick the most recent item
   const item = items[0]!;
-  const text = composePost(item);
-  const authorUrn = `urn:li:person:${session.linkedinSub}`;
+  const text = session.orgId ? composePostCompany(item) : composePost(item);
+  const authorUrn = session.orgId
+    ? `urn:li:organization:${session.orgId}`
+    : `urn:li:person:${session.linkedinSub}`;
 
   const client = new LinkedInClient();
   try {

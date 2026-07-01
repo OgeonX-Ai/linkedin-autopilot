@@ -55,7 +55,7 @@ async function fetchNewsContext(): Promise<NewsItem | null> {
 }
 
 function composeThoughtLeadership(news: NewsItem): string {
-  // Hook → context → insight → question format
+  // Hook → context → insight → question format (personal voice)
   const lines = [
     `The AI landscape is shifting faster than most realize.`,
     ``,
@@ -76,11 +76,37 @@ function composeThoughtLeadership(news: NewsItem): string {
   return lines.join("\n").slice(0, 3000);
 }
 
+function composeThoughtLeadershipCompany(news: NewsItem): string {
+  // Company voice — OgeonX AI brand, solution-aware, CTA to follow
+  const lines = [
+    `At OgeonX AI, we track the AI landscape so you don't have to.`,
+    ``,
+    `This week caught our attention: ${news.title}`,
+    ``,
+    `${news.description.slice(0, 200)}`,
+    ``,
+    `What this means for businesses automating their LinkedIn presence:`,
+    ``,
+    `→ AI-first companies are gaining an asymmetric advantage in content output`,
+    `→ Professionals who automate distribution will reach 10x more of their network`,
+    `→ The bottleneck isn't ideas — it's consistent, high-quality execution`,
+    ``,
+    `OgeonX AI automates LinkedIn posting for founders, executives, and teams who can't afford to go quiet on their audience.`,
+    ``,
+    `Which of these AI shifts are you most focused on this year?`,
+    ``,
+    `Follow OgeonX AI for daily AI insights →`,
+    ``,
+    `#OgeonXAI #AI #LinkedInAutomation #FutureOfWork #MarketingAutomation #ArtificialIntelligence`,
+  ];
+  return lines.join("\n").slice(0, 3000);
+}
+
 export async function postThoughtLeadershipHandler(
   _args: Record<string, unknown>,
-  session: { accessToken?: string; linkedinSub?: string },
+  session: { accessToken?: string; linkedinSub?: string; orgId?: string },
 ): Promise<{ isError: boolean; content: Array<{ type: "text"; text: string }> }> {
-  if (!session.accessToken || !session.linkedinSub) {
+  if (!session.accessToken || (!session.linkedinSub && !session.orgId)) {
     return {
       isError: true,
       content: [{ type: "text", text: "Not authenticated. Visit /auth/login to connect LinkedIn." }],
@@ -95,8 +121,12 @@ export async function postThoughtLeadershipHandler(
     };
   }
 
-  const text = composeThoughtLeadership(news);
-  const authorUrn = `urn:li:person:${session.linkedinSub}`;
+  const text = session.orgId
+    ? composeThoughtLeadershipCompany(news)
+    : composeThoughtLeadership(news);
+  const authorUrn = session.orgId
+    ? `urn:li:organization:${session.orgId}`
+    : `urn:li:person:${session.linkedinSub}`;
   const client = new LinkedInClient();
 
   try {

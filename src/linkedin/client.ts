@@ -57,6 +57,19 @@ export interface LinkedInPost {
   postUrl: string;
 }
 
+export interface OrganizationProfileUpdate {
+  description?: {
+    localized: Record<string, string>;
+    preferredLocale: { country: string; language: string };
+  };
+  tagline?: {
+    localized: Record<string, string>;
+    preferredLocale: { country: string; language: string };
+  };
+  specialties?: string[];
+  websiteUrl?: string;
+}
+
 export class LinkedInClient {
   private async request(
     url: string,
@@ -125,6 +138,26 @@ export class LinkedInClient {
     const postId = response.headers.get("x-linkedin-id") ?? "";
     const postUrl = `https://www.linkedin.com/feed/update/${postId}/`;
     return { postId, postUrl };
+  }
+
+  async updateOrganization(
+    accessToken: string,
+    orgId: string,
+    updates: OrganizationProfileUpdate,
+  ): Promise<void> {
+    const body = { patch: { $set: updates } };
+    await this.request(
+      `https://api.linkedin.com/v2/organizations/${orgId}`,
+      accessToken,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "X-RestLi-Method": "PARTIAL_UPDATE",
+        },
+        body: JSON.stringify(body),
+      },
+    );
   }
 
   async createArticlePost(

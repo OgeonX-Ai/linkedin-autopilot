@@ -2,9 +2,9 @@ import { LinkedInClient, LinkedInApiError } from "../linkedin/client.js";
 
 export async function postUpdateHandler(
   args: { text?: string },
-  session: { accessToken?: string; linkedinSub?: string },
+  session: { accessToken?: string; linkedinSub?: string; orgId?: string },
 ) {
-  if (!session.accessToken || !session.linkedinSub) {
+  if (!session.accessToken || (!session.linkedinSub && !session.orgId)) {
     return {
       isError: true,
       content: [
@@ -39,7 +39,9 @@ export async function postUpdateHandler(
   }
 
   // T-04-04: authorUrn comes from server-side session, never from client args
-  const authorUrn = `urn:li:person:${session.linkedinSub}`;
+  const authorUrn = session.orgId
+    ? `urn:li:organization:${session.orgId}`
+    : `urn:li:person:${session.linkedinSub}`;
   const client = new LinkedInClient();
 
   try {

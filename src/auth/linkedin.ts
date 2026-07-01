@@ -17,7 +17,7 @@ const TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const USERINFO_URL = "https://api.linkedin.com/v2/userinfo";
 
 // ONLY these scopes — old scopes (r_liteprofile, r_emailaddress) return 401 immediately
-const SCOPES = ["openid", "profile", "email", "w_member_social"] as const;
+const SCOPES = ["openid", "profile", "email", "w_member_social", "w_organization_social", "r_organization_social", "rw_organization_admin"] as const;
 
 export class OAuthError extends Error {
   constructor(

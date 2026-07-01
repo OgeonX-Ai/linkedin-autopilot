@@ -8,8 +8,10 @@ import { postArticleHandler } from "../tools/post-article.js";
 import { searchJobsHandler } from "../tools/search-jobs.js";
 import { postThoughtLeadershipHandler } from "../tools/post-thought-leadership.js";
 import { postWeeklyRoundupHandler } from "../tools/post-weekly-roundup.js";
+import { updateCompanyPageHandler } from "../tools/update-company-page.js";
 import { sessionStore } from "../auth/session.js";
 import type { SessionData } from "../auth/session.js";
+import { config } from "../config.js";
 
 /**
  * Build an MCP server wired to the real LinkedIn tool handlers.
@@ -153,6 +155,101 @@ export function buildMcpServer(sessionId: string = ""): McpServer {
         ...(session.linkedinSub !== undefined ? { linkedinSub: session.linkedinSub } : {}),
       };
       return postArticleHandler({ title, body, topic, sourceUrl }, sessionArg);
+    },
+  );
+
+  server.tool(
+    "updateCompanyPage",
+    "Update the OgeonX AI LinkedIn company page profile — sets the About description (English + Finnish), tagline (English + Finnish), specialties, and website URL via the LinkedIn API. Requires rw_organization_admin scope.",
+    {},
+    async () => {
+      const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
+      return updateCompanyPageHandler({
+        ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+      });
+    },
+  );
+
+  // ── Company page tools (post as OgeonX AI LinkedIn page) ──────────────────
+
+  server.tool(
+    "postCompanyUpdate",
+    "Post a text update to the OgeonX AI LinkedIn company page. Use this when the content represents the company brand, product announcements, or company news — not personal insights.",
+    {
+      text: z
+        .string()
+        .min(1, "Post text cannot be empty")
+        .max(3000, "Post text cannot exceed LinkedIn's 3000-character limit")
+        .describe("The text content of the LinkedIn post (1–3000 characters)"),
+    },
+    async ({ text }) => {
+      const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
+      return postUpdateHandler({ text }, {
+        ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(config.linkedinOrgId !== undefined ? { orgId: config.linkedinOrgId } : {}),
+      });
+    },
+  );
+
+  server.tool(
+    "postCompanyAINews",
+    "Fetch a trending AI news headline and post it to the OgeonX AI company LinkedIn page. No parameters needed.",
+    {},
+    async () => {
+      const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
+      return postAINewsHandler({}, {
+        ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(config.linkedinOrgId !== undefined ? { orgId: config.linkedinOrgId } : {}),
+      });
+    },
+  );
+
+  server.tool(
+    "postCompanyThoughtLeadership",
+    "Post a thought-leadership insight about AI trends to the OgeonX AI company LinkedIn page. Fetches a recent news item for context and composes an opinion-style post with a closing question.",
+    {},
+    async () => {
+      const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
+      return postThoughtLeadershipHandler({}, {
+        ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(config.linkedinOrgId !== undefined ? { orgId: config.linkedinOrgId } : {}),
+      });
+    },
+  );
+
+  server.tool(
+    "postCompanyWeeklyRoundup",
+    "Post a weekly AI news roundup to the OgeonX AI company LinkedIn page — curates top 5 stories into a save-worthy summary. Best posted on Fridays.",
+    {},
+    async () => {
+      const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
+      return postWeeklyRoundupHandler({}, {
+        ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(config.linkedinOrgId !== undefined ? { orgId: config.linkedinOrgId } : {}),
+      });
+    },
+  );
+
+  server.tool(
+    "postCompanyArticle",
+    "Post a long-form article to the OgeonX AI company LinkedIn page. Provide a title and body — formatted with hashtags and posted as the company.",
+    {
+      title: z.string().min(1).max(150).describe("Article headline"),
+      body: z.string().min(50).max(2800).describe("Article body text"),
+      topic: z.string().optional().describe("Topic hint for hashtags: ai, tech, startup, or future"),
+      sourceUrl: z.string().url().optional().describe("Optional URL to share as article preview"),
+    },
+    async ({ title, body, topic, sourceUrl }) => {
+      const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
+      return postArticleHandler({
+        title,
+        body,
+        ...(topic !== undefined ? { topic } : {}),
+        ...(sourceUrl !== undefined ? { sourceUrl } : {}),
+      }, {
+        ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(config.linkedinOrgId !== undefined ? { orgId: config.linkedinOrgId } : {}),
+      });
     },
   );
 
