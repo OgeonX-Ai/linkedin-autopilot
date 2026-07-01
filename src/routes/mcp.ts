@@ -5,6 +5,7 @@ import { buildMcpServer } from "../mcp/server.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { HttpBindings } from "@hono/node-server";
 import { requireAuth } from "../middleware/require-auth.js";
+import { getSessionId } from "../auth/cookie.js";
 
 export const mcpRoutes = new Hono<{ Bindings: HttpBindings }>();
 
@@ -53,7 +54,9 @@ mcpRoutes.all("/mcp", async (c) => {
   // Stateless mode: omit sessionIdGenerator entirely (exactOptionalPropertyTypes-safe)
   const transport = new StreamableHTTPServerTransport({});
 
-  const mcpServer = buildMcpServer();
+  // Pass sessionId so tool handlers can resolve the server-side session (T-04-04)
+  const sessionId = getSessionId(c) ?? "";
+  const mcpServer = buildMcpServer(sessionId);
   // Cast to Transport to satisfy exactOptionalPropertyTypes strictness on optional callbacks
   await mcpServer.connect(transport as unknown as Transport);
 
