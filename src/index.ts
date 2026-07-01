@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { loadSessions, saveSessions } from "./auth/session-persist.js";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import type { HttpBindings } from "@hono/node-server";
@@ -10,6 +11,14 @@ import { mcpRoutes } from "./routes/mcp.js";
 import { wellKnownRoutes } from "./routes/well-known.js";
 import { authRoutes } from "./routes/auth.js";
 import { oauthRoutes } from "./routes/oauth.js";
+import { routineRoutes } from "./routes/routine.js";
+
+// Load persisted sessions from disk (survives server restarts)
+loadSessions();
+// Save sessions every 5 minutes and on exit
+setInterval(saveSessions, 5 * 60 * 1000).unref();
+process.on("SIGINT", () => { saveSessions(); process.exit(0); });
+process.on("SIGTERM", () => { saveSessions(); process.exit(0); });
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -27,6 +36,9 @@ app.route("/auth", authRoutes);
 
 // OAuth AS routes for ChatGPT (authorize + token)
 app.route("/oauth", oauthRoutes);
+
+// Scheduled routine endpoints (called by Claude routines with Bearer JWT)
+app.route("/routine", routineRoutes);
 
 // MCP Streamable HTTP protocol endpoints (Phase 2 — GET+POST /mcp)
 // requireAuth is applied inside mcpRoutes on the tools/call path (see routes/mcp.ts)

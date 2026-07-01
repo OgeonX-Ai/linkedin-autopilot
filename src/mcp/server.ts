@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getProfileHandler } from "../tools/get-profile.js";
 import { postUpdateHandler } from "../tools/post-update.js";
 import { getRecentCommitsHandler } from "../tools/get-recent-commits.js";
+import { postAINewsHandler } from "../tools/post-ai-news.js";
 import { sessionStore } from "../auth/session.js";
 import type { SessionData } from "../auth/session.js";
 
@@ -72,6 +73,20 @@ export function buildMcpServer(sessionId: string = ""): McpServer {
       const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
       const sessionArg = session.accessToken !== undefined ? { accessToken: session.accessToken } : {};
       return getRecentCommitsHandler({ repoPath, count }, sessionArg);
+    },
+  );
+
+  server.tool(
+    "postAINews",
+    "Fetch a trending AI news headline from public RSS feeds and post it to LinkedIn automatically. No parameters needed — picks the most recent story and composes a professional post.",
+    {},
+    async () => {
+      const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
+      const sessionArg = {
+        ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(session.linkedinSub !== undefined ? { linkedinSub: session.linkedinSub } : {}),
+      };
+      return postAINewsHandler({}, sessionArg);
     },
   );
 

@@ -14,6 +14,7 @@ import crypto from "node:crypto";
 import { buildAuthUrl, exchangeCode, generateState, OAuthError } from "../auth/linkedin.js";
 import { sessionStore } from "../auth/session.js";
 import { signJwt } from "../auth/jwt.js";
+import { saveSessions } from "../auth/session-persist.js";
 import { config } from "../config.js";
 
 export const oauthRoutes = new Hono();
@@ -103,6 +104,7 @@ oauthRoutes.get("/callback", async (c) => {
       linkedinSub: tokens.linkedinSub,
       ...(tokens.refreshToken ? { refreshToken: tokens.refreshToken } : {}),
     });
+    saveSessions(); // persist immediately so restarts don't lose the session
 
     // Issue a short-lived code to ChatGPT
     const authCode = crypto.randomBytes(32).toString("hex");
