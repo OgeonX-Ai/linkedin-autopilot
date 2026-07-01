@@ -11,7 +11,7 @@
 
 import { Hono } from "hono";
 import crypto from "node:crypto";
-import { buildAuthUrl, exchangeCode, generateState, OAuthError } from "../auth/linkedin.js";
+import { exchangeCode, generateState, OAuthError } from "../auth/linkedin.js";
 import { sessionStore } from "../auth/session.js";
 import { signJwt } from "../auth/jwt.js";
 import { saveSessions } from "../auth/session-persist.js";
@@ -44,28 +44,18 @@ oauthRoutes.get("/authorize", (c) => {
   // Encode authReqId into the LinkedIn state so the callback can retrieve it
   const linkedinState = generateState() + "." + authReqId;
 
-  // Bootstrap a session entry for the CSRF state
-  const sessionId = crypto.randomUUID();
-  sessionStore.set(sessionId, {
-    accessToken: "",
-    expiresAt: 0,
-    linkedinSub: "",
-    oauthState: linkedinState,
+  // Build LinkedIn auth URL using /oauth/callback as redirect (separate from /auth/callback)
+  const oauthCallbackUri = `${config.SERVER_URL}/oauth/callback`;
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: config.LINKEDIN_CLIENT_ID,
+    redirect_uri: oauthCallbackUri,
+    scope: "openid profile email w_member_social w_organization_social r_organization_social",
+    state: linkedinState,
   });
+  const linkedinAuthUrl = `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`;
 
-  // Set session cookie for the callback to read
-  const signed = (() => {
-    const hmac = crypto.createHmac("sha256", config.SESSION_SECRET);
-    hmac.update(sessionId);
-    return `${sessionId}.${hmac.digest("hex")}`;
-  })();
-  const secure = process.env["NODE_ENV"] === "production" ? "; Secure" : "";
-  c.header(
-    "Set-Cookie",
-    `sid=${encodeURIComponent(signed)}; HttpOnly; SameSite=Lax; Path=/${secure}; Max-Age=600`,
-  );
-
-  return c.redirect(buildAuthUrl(linkedinState), 302);
+  return c.redirect(linkedinAuthUrl, 302);
 });
 
 /**
@@ -96,7 +86,8 @@ oauthRoutes.get("/callback", async (c) => {
   pendingAuthRequests.delete(authReqId);
 
   try {
-    const tokens = await exchangeCode(code);
+    const oauthCallbackUri = `${config.SERVER_URL}/oauth/callback`;
+    const tokens = await exchangeCode(code, oauthCallbackUri);
     const sessionId = crypto.randomUUID();
     sessionStore.set(sessionId, {
       accessToken: tokens.accessToken,

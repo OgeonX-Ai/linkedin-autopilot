@@ -1,12 +1,13 @@
 /**
  * requireAuth — gates MCP tool calls behind a valid LinkedIn session.
  *
- * Accepts two auth methods:
- *   1. Bearer JWT in Authorization header (ChatGPT / OAuth AS flow)
- *   2. Signed session cookie (browser-based flow)
+ * Accepts three auth methods (tried in order):
+ *   1. Bearer JWT — Claude Code routines, ChatGPT OAuth AS flow
+ *   2. X-API-Key header (or Bearer <key>) — Google Agentspace, Gemini, n8n, Zapier
+ *   3. Signed session cookie — browser flow
  *
  * On expiry, attempts silent refresh if refresh token is available.
- * Returns JSON-RPC -32001 (HTTP 200) so ChatGPT shows the message to the user.
+ * Returns JSON-RPC -32001 (HTTP 200) so MCP clients show the message to the user.
  */
 
 import type { MiddlewareHandler, Context } from "hono";
@@ -17,6 +18,7 @@ import { verifyJwt } from "../auth/jwt.js";
 import { sessionStore } from "../auth/session.js";
 import type { SessionData } from "../auth/session.js";
 import { config } from "../config.js";
+import crypto from "node:crypto";
 
 type McpContext = Context<{ Bindings: HttpBindings; Variables: { parsedBody: unknown } }>;
 
@@ -42,20 +44,40 @@ function mcpAuthError(c: McpContext, id: string | number | null): Response {
   );
 }
 
-/** Resolve session from Bearer JWT or session cookie. Returns [session, sessionId]. */
+/** Resolve session from Bearer JWT, API key, or session cookie. Returns [session, sessionId]. */
 function resolveSession(c: McpContext): [SessionData | undefined, string | null] {
-  // 1. Try Bearer JWT (ChatGPT / OAuth AS flow)
   const authHeader = c.req.header("authorization");
+  const apiKeyHeader = c.req.header("x-api-key");
+
+  // 1. Try Bearer JWT (Claude routines / ChatGPT OAuth AS / routine JWT)
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
     const claims = verifyJwt(token);
     if (claims) {
-      const session = sessionStore.get(claims.sub);
-      return [session, claims.sub];
+      return [sessionStore.get(claims.sub), claims.sub];
     }
   }
 
-  // 2. Fall back to session cookie (browser flow)
+  // 2. Try API key — X-API-Key header or Bearer <key> that failed JWT parse
+  //    Uses timing-safe comparison to prevent timing attacks on the key.
+  //    Resolves to the first active LinkedIn session (single-owner self-hosting).
+  const candidateKey = apiKeyHeader ?? (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined);
+  if (candidateKey && config.apiKeys.length > 0) {
+    const keyBuf = Buffer.from(candidateKey);
+    const matched = config.apiKeys.some((k) => {
+      const kb = Buffer.from(k);
+      return kb.length === keyBuf.length && crypto.timingSafeEqual(kb, keyBuf);
+    });
+    if (matched) {
+      for (const [sessionId, session] of sessionStore.entries()) {
+        if (session.accessToken && session.expiresAt > Date.now()) {
+          return [session, sessionId];
+        }
+      }
+    }
+  }
+
+  // 3. Fall back to session cookie (browser / landing page)
   return [getSession(c), getSessionId(c)];
 }
 

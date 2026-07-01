@@ -9,6 +9,9 @@ export interface Config {
   port: number;
   allowedOrigins: string[];
   serverUrl: string;
+  apiKeys: string[];       // pre-shared keys for Google / n8n / Zapier / any HTTP client
+  adminSecret: string;
+  linkedinOrgId?: string;
   // Uppercase aliases kept for backward compatibility with existing callers
   SESSION_SECRET: string;
   LINKEDIN_CLIENT_ID: string;
@@ -50,6 +53,15 @@ export function validateConfig(): Config {
 
   const serverUrl = process.env.SERVER_URL ?? "";
 
+  // Comma-separated pre-shared API keys — for Google Agentspace, Gemini, n8n, Zapier, etc.
+  const apiKeys = (process.env.API_KEYS ?? "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+
+  const adminSecret = process.env.ADMIN_SECRET ?? "";
+  const linkedinOrgId = process.env.LINKEDIN_ORG_ID || undefined;
+
   return {
     // camelCase (spec)
     sessionSecret,
@@ -59,6 +71,9 @@ export function validateConfig(): Config {
     port,
     allowedOrigins,
     serverUrl,
+    apiKeys,
+    adminSecret,
+    ...(linkedinOrgId !== undefined ? { linkedinOrgId } : {}),
     // UPPER_SNAKE_CASE aliases (backward compat with existing callers)
     SESSION_SECRET: sessionSecret,
     LINKEDIN_CLIENT_ID: linkedinClientId,

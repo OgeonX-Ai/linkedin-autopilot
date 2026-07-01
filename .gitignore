@@ -15,3 +15,10 @@ dist/
 npm-debug.log*
 .vscode/
 .idea/
+
+# Runtime data — contains live tokens and session state, never commit
+.sessions.json
+.users.json
+
+# AI refiner working files — may contain env vars captured during sessions
+.refiner/

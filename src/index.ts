@@ -15,6 +15,7 @@ import { oauthRoutes } from "./routes/oauth.js";
 import { routineRoutes } from "./routes/routine.js";
 import { landingRoutes } from "./routes/landing.js";
 import { adminRoutes } from "./routes/admin.js";
+import { openapiRoutes } from "./routes/openapi.js";
 
 // Load persisted data from disk (survives server restarts)
 loadSessions();
@@ -56,6 +57,9 @@ app.route("/", mcpRoutes);
 
 // OAuth Protected Resource discovery (Phase 2 — MCP-07)
 app.route("/.well-known", wellKnownRoutes);
+
+// OpenAPI spec — for Google Agentspace, Gemini, n8n, Zapier, any OpenAPI client
+app.route("/", openapiRoutes);
 
 // Error sanitization — must be registered AFTER all routes
 app.onError(sanitizeErrors);
