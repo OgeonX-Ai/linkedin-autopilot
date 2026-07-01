@@ -5,6 +5,7 @@ import { postUpdateHandler } from "../tools/post-update.js";
 import { getRecentCommitsHandler } from "../tools/get-recent-commits.js";
 import { postAINewsHandler } from "../tools/post-ai-news.js";
 import { postArticleHandler } from "../tools/post-article.js";
+import { searchJobsHandler } from "../tools/search-jobs.js";
 import { postThoughtLeadershipHandler } from "../tools/post-thought-leadership.js";
 import { postWeeklyRoundupHandler } from "../tools/post-weekly-roundup.js";
 import { sessionStore } from "../auth/session.js";
@@ -122,20 +123,36 @@ export function buildMcpServer(sessionId: string = ""): McpServer {
   );
 
   server.tool(
+    "searchJobs",
+    "Search for job listings. Fetches remote jobs from Remotive.io and Finnish jobs from Indeed. Returns up to 8 results with title, company, location, URL, and description.",
+    {
+      keyword: z.string().optional().describe("Job search keyword (e.g. 'software engineer', 'data scientist')"),
+      location: z.string().optional().default("Finland").describe("Location filter (default: Finland)"),
+      remote: z.boolean().optional().default(false).describe("Include remote jobs from Remotive.io"),
+    },
+    async ({ keyword, location, remote }) => {
+      const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
+      const sessionArg = session.accessToken !== undefined ? { accessToken: session.accessToken } : {};
+      return searchJobsHandler({ keyword, location, remote }, sessionArg);
+    },
+  );
+
+  server.tool(
     "postArticle",
     "Post a long-form article to LinkedIn. Provide a title and body — the server formats it with hashtags and posts it. Articles live permanently on the profile and are indexed by Google.",
     {
       title: z.string().min(1).max(150).describe("Article headline"),
       body: z.string().min(50).max(2800).describe("Article body text"),
       topic: z.string().optional().describe("Topic hint for hashtags: ai, tech, startup, or future"),
+      sourceUrl: z.string().url().optional().describe("Optional URL to share as article preview — enables rich link preview on the post"),
     },
-    async ({ title, body, topic }) => {
+    async ({ title, body, topic, sourceUrl }) => {
       const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
       const sessionArg = {
         ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
         ...(session.linkedinSub !== undefined ? { linkedinSub: session.linkedinSub } : {}),
       };
-      return postArticleHandler({ title, body, topic }, sessionArg);
+      return postArticleHandler({ title, body, topic, sourceUrl }, sessionArg);
     },
   );
 

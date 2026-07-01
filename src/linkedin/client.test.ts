@@ -104,9 +104,9 @@ describe("LinkedInClient.createPost", () => {
     vi.clearAllMocks();
   });
 
-  it("returns postId and postUrl from X-RestLi-Id header on 201", async () => {
+  it("returns postId and postUrl from x-linkedin-id header on 201", async () => {
     mockFetch.mockResolvedValueOnce(
-      makeResponse(201, {}, { "X-RestLi-Id": "urn:li:share:123" }),
+      makeResponse(201, {}, { "x-linkedin-id": "urn:li:share:123" }),
     );
     const post = await client.createPost("token", "urn:li:person:abc", "Hello");
     expect(post.postId).toBe("urn:li:share:123");

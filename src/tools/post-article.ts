@@ -17,6 +17,7 @@ export interface ArticleInput {
   title: string;
   body: string;    // Full article body — will be formatted and trimmed to 3000 chars
   topic?: string;  // Optional topic hint for hashtag generation
+  sourceUrl?: string; // Optional URL to share as article preview (uses createArticlePost)
 }
 
 const TOPIC_HASHTAGS: Record<string, string[]> = {
@@ -50,7 +51,7 @@ function formatArticle(input: ArticleInput): string {
 }
 
 export async function postArticleHandler(
-  args: { title?: string; body?: string; topic?: string },
+  args: { title?: string; body?: string; topic?: string; sourceUrl?: string },
   session: { accessToken?: string; linkedinSub?: string },
 ): Promise<{ isError: boolean; content: Array<{ type: "text"; text: string }> }> {
   if (!session.accessToken || !session.linkedinSub) {
@@ -62,6 +63,7 @@ export async function postArticleHandler(
 
   const title = (args.title ?? "").trim();
   const body = (args.body ?? "").trim();
+  const sourceUrl = (args.sourceUrl ?? "").trim();
 
   if (!title || !body) {
     return {
@@ -70,12 +72,25 @@ export async function postArticleHandler(
     };
   }
 
-  const text = formatArticle({ title, body, topic: args.topic });
   const authorUrn = `urn:li:person:${session.linkedinSub}`;
   const client = new LinkedInClient();
 
   try {
-    const post = await client.createPost(session.accessToken, authorUrn, text);
+    let post;
+    if (sourceUrl) {
+      // Use article preview (URL share) via createArticlePost
+      const commentary = formatArticle({ title, body, topic: args.topic });
+      post = await client.createArticlePost(
+        session.accessToken,
+        authorUrn,
+        commentary,
+        { source: sourceUrl, title, description: body.slice(0, 200) },
+      );
+    } else {
+      // Fall back to long-form text post
+      const text = formatArticle({ title, body, topic: args.topic });
+      post = await client.createPost(session.accessToken, authorUrn, text);
+    }
     return {
       isError: false,
       content: [{

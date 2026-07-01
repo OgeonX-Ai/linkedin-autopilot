@@ -31,7 +31,7 @@ export class LinkedInApiError extends Error {
   }
 }
 
-export const LINKEDIN_VERSION = "202304";
+export const LINKEDIN_VERSION = "202501";
 
 const LINKEDIN_ERROR_MESSAGES: Record<number, string> = {
   401: "Not authenticated. Please reconnect your LinkedIn account.",
@@ -100,20 +100,19 @@ export class LinkedInClient {
   ): Promise<LinkedInPost> {
     const body = {
       author: authorUrn,
+      commentary: text,
+      visibility: "PUBLIC",
+      distribution: {
+        feedDistribution: "MAIN_FEED",
+        targetEntities: [],
+        thirdPartyDistributionChannels: [],
+      },
       lifecycleState: "PUBLISHED",
-      specificContent: {
-        "com.linkedin.ugc.ShareContent": {
-          shareCommentary: { text },
-          shareMediaCategory: "NONE",
-        },
-      },
-      visibility: {
-        "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC",
-      },
+      isReshareDisabledByAuthor: false,
     };
 
     const response = await this.request(
-      "https://api.linkedin.com/v2/ugcPosts",
+      "https://api.linkedin.com/v2/posts",
       accessToken,
       {
         method: "POST",
@@ -122,8 +121,50 @@ export class LinkedInClient {
       },
     );
 
-    // LinkedIn 201: post URN is in the X-RestLi-Id response header
-    const postId = response.headers.get("X-RestLi-Id") ?? "";
+    // LinkedIn 201: post ID is in the x-linkedin-id response header
+    const postId = response.headers.get("x-linkedin-id") ?? "";
+    const postUrl = `https://www.linkedin.com/feed/update/${postId}/`;
+    return { postId, postUrl };
+  }
+
+  async createArticlePost(
+    accessToken: string,
+    authorUrn: string,
+    commentary: string,
+    article: { source: string; title: string; description: string },
+  ): Promise<LinkedInPost> {
+    const body = {
+      author: authorUrn,
+      commentary,
+      visibility: "PUBLIC",
+      distribution: {
+        feedDistribution: "MAIN_FEED",
+        targetEntities: [],
+        thirdPartyDistributionChannels: [],
+      },
+      content: {
+        article: {
+          source: article.source,
+          title: article.title,
+          description: article.description,
+        },
+      },
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false,
+    };
+
+    const response = await this.request(
+      "https://api.linkedin.com/v2/posts",
+      accessToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+
+    // LinkedIn 201: post ID is in the x-linkedin-id response header
+    const postId = response.headers.get("x-linkedin-id") ?? "";
     const postUrl = `https://www.linkedin.com/feed/update/${postId}/`;
     return { postId, postUrl };
   }
