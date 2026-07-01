@@ -1,45 +1,75 @@
-# LinkedIn MCP Server
+# OgeonX LinkedIn Autopilot
 
-An MCP (Model Context Protocol) server that connects ChatGPT to LinkedIn. Users can fetch their LinkedIn profile and post updates directly from ChatGPT.
+> Automate your LinkedIn presence via ChatGPT — post AI news, thought leadership, articles, and job listings automatically.
 
-**Stack:** TypeScript · Node.js · Hono · MCP 2025-06-18 · LinkedIn v2 API
-
----
-
-## Prerequisites
-
-- Node.js 20+
-- A [LinkedIn Developer account](https://developer.linkedin.com)
-- A tunnel tool (Cloudflare Tunnel recommended — free permanent subdomain)
+Built on the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) — ChatGPT connects to this server and can post to LinkedIn on your behalf, search jobs, and run scheduled content routines.
 
 ---
 
-## Step 1: Clone and install
+## What it does
+
+| Tool | Description |
+|------|-------------|
+| `getProfile` | Fetch your LinkedIn profile |
+| `postUpdate` | Post any text to LinkedIn |
+| `postAINews` | Auto-curate + post trending AI news from RSS |
+| `postThoughtLeadership` | Wednesday opinion-style post (drives comments) |
+| `postWeeklyRoundup` | Friday top-5 AI stories digest |
+| `postArticle` | Long-form article with optional rich URL preview |
+| `getRecentCommits` | Read your git history, compose a dev update post |
+| `searchJobs` | Search Finnish + remote jobs (Indeed FI + Remotive) |
+
+---
+
+## Architecture
+
+```
+ChatGPT
+  │  OAuth 2.0 (your app acts as Authorization Server)
+  ▼
+LinkedIn Autopilot Server  (Hono + Node.js, TypeScript)
+  │
+  ├── /mcp          ← MCP Streamable HTTP (2025-06-18)
+  ├── /auth/*       ← LinkedIn OAuth for browser
+  ├── /oauth/*      ← OAuth AS endpoints for ChatGPT
+  ├── /routine/*    ← Bearer-JWT HTTP endpoints for scheduled tasks
+  ├── /             ← Landing page (multi-user onboarding)
+  └── /admin/users  ← Connected user dashboard
+  │
+  ▼
+LinkedIn API v2 (/v2/posts — new 2025 Posts API)
+```
+
+**Key design decisions:**
+- Two-leg OAuth: server holds LinkedIn tokens, ChatGPT gets short-lived JWTs
+- Session + user registry persisted as JSON files (no database required)
+- JWT signed with Node built-in `crypto` (no external deps)
+- All LinkedIn headers enforced in one place (`linkedinFetch`) — callers can't bypass them
+- `spawnSync` for git commands (no shell injection — args as array, no string interpolation)
+
+---
+
+## Quick start
+
+### 1. Clone and install
 
 ```bash
-git clone <repo-url> linkedin-mcp
-cd linkedin-mcp
+git clone https://github.com/OgeonX-Ai/linkedin-autopilot
+cd linkedin-autopilot
 npm install
 ```
 
----
+### 2. Create a LinkedIn app
 
-## Step 2: Create a LinkedIn App
+1. Go to [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps)
+2. Create a new app
+3. Under **Auth**, add two redirect URLs:
+   - `https://YOUR_TUNNEL_URL/auth/callback`
+   - `https://YOUR_TUNNEL_URL/oauth/callback`
+4. Request these OAuth scopes: `openid`, `profile`, `email`, `w_member_social`
+5. Copy **Client ID** and **Client Secret**
 
-1. Go to [LinkedIn Developer Portal](https://developer.linkedin.com/apps)
-2. Click **Create app**
-3. Fill in App Name, LinkedIn Page (create one if needed), and upload a logo
-4. Under **Products**, request access to:
-   - **Sign In with LinkedIn using OpenID Connect**
-   - **Share on LinkedIn**
-5. Go to **Auth** tab → note your **Client ID** and **Client Secret**
-6. Under **OAuth 2.0 settings → Authorized redirect URLs**, add your tunnel URL (Step 4)
-
-> ⚠️ LinkedIn requires exact redirect URI matching — no trailing slashes, must be HTTPS.
-
----
-
-## Step 3: Configure environment
+### 3. Set environment variables
 
 ```bash
 cp .env.example .env
@@ -48,116 +78,183 @@ cp .env.example .env
 Edit `.env`:
 
 ```env
-LINKEDIN_CLIENT_ID=your_client_id_here
-LINKEDIN_CLIENT_SECRET=your_client_secret_here
-SESSION_SECRET=<generate below>
-LINKEDIN_REDIRECT_URI=https://your-tunnel-url/auth/callback
+LINKEDIN_CLIENT_ID=your_client_id
+LINKEDIN_CLIENT_SECRET=your_client_secret
+SESSION_SECRET=at_least_32_random_characters_here
 PORT=3000
-ALLOWED_ORIGINS=https://chat.openai.com,https://chatgpt.com
-SERVER_URL=https://your-tunnel-url
+ALLOWED_ORIGINS=https://chatgpt.com
+LINKEDIN_REDIRECT_URI=https://YOUR_TUNNEL_URL/auth/callback
+SERVER_URL=https://YOUR_TUNNEL_URL
+
+# Optional: enable admin dashboard at /admin/users?secret=xxx
+ADMIN_SECRET=your_admin_secret
 ```
 
-Generate a secure SESSION_SECRET:
+Generate a strong `SESSION_SECRET`:
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
----
+### 4. Start a Cloudflare Tunnel
 
-## Step 4: Set up a tunnel
-
-You need a public HTTPS URL so LinkedIn can redirect back to your local server.
-
-**Option A — Cloudflare Tunnel (Recommended: free, permanent subdomain)**
 ```bash
-# Install: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+# Install cloudflared once
+winget install Cloudflare.cloudflared   # Windows
+brew install cloudflared                # Mac
+
+# Start tunnel (gives you a free HTTPS URL)
 cloudflared tunnel --url http://localhost:3000
 ```
-Copy the `trycloudflare.com` URL — it stays the same across restarts.
 
-**Option B — ngrok (paid static domain)**
+Copy the `https://*.trycloudflare.com` URL into your `.env` as `SERVER_URL` and `LINKEDIN_REDIRECT_URI`.
+
+### 5. Run the server
+
 ```bash
-ngrok http --domain=your-static-domain.ngrok-free.app 3000
+npm run dev        # development (tsx watch)
+npm run build      # production build
+npm start          # run built output
 ```
 
-**Option C — ngrok free (not recommended)**
-```bash
-ngrok http 3000
-```
-⚠️ Free ngrok randomizes the subdomain on every restart. You must update the LinkedIn redirect URI and your `.env` each time.
-
-**After getting your tunnel URL:**
-1. Update `LINKEDIN_REDIRECT_URI`, `SERVER_URL` in `.env` to use the tunnel URL
-2. Add `https://your-tunnel-url/auth/callback` as an authorized redirect URI in your LinkedIn app (Step 2 → Auth tab)
-
-> ⚠️ Register the redirect URI in LinkedIn **before** starting the server — LinkedIn validates it at auth time.
+Visit `http://localhost:3000` — you'll see the landing page.
 
 ---
 
-## Step 5: Start the server
+## Connect to ChatGPT
 
-```bash
-npm run dev
+1. Open ChatGPT → Explore GPTs → your GPT → Edit → Add action
+2. Import OpenAPI schema from:
+   ```
+   https://YOUR_TUNNEL_URL/.well-known/openapi.json
+   ```
+3. Set authentication type: **OAuth**
+   - Client ID: your LinkedIn Client ID
+   - Client Secret: your LinkedIn Client Secret
+   - Authorization URL: `https://YOUR_TUNNEL_URL/oauth/authorize`
+   - Token URL: `https://YOUR_TUNNEL_URL/oauth/token`
+   - Scope: `openid profile email w_member_social`
+4. Save the GPT, click **Sign in with LinkedIn**, authorize
+
+---
+
+## Scheduled routines
+
+Get a 30-day token for automated posting:
+
+1. Visit `https://YOUR_TUNNEL_URL/auth/login` in your browser
+2. Authorize with LinkedIn
+3. Visit `https://YOUR_TUNNEL_URL/routine/token` — copy the JWT
+
+Use the token as `Authorization: Bearer <token>` when calling routine endpoints:
+
+| Endpoint | Recommended schedule |
+|----------|----------------------|
+| `POST /routine/post-ai-news` | Mon/Tue/Thu 10:00 EET |
+| `POST /routine/post-thought-leadership` | Wed 11:00 EET |
+| `POST /routine/post-weekly-roundup` | Fri 10:00 EET |
+
+### Claude Desktop scheduled tasks
+
+In Claude Desktop settings, create a scheduled task with prompt:
 ```
-
-Verify it's running:
-```bash
-curl http://localhost:3000/health
-# → {"status":"ok"}
+Call POST https://YOUR_TUNNEL_URL/routine/post-ai-news
+with header Authorization: Bearer YOUR_TOKEN
 ```
 
 ---
 
-## Step 6: Connect to ChatGPT
+## Multi-user / SaaS mode
 
-1. Open [ChatGPT](https://chat.openai.com)
-2. Go to **Settings → Connectors** (or the Apps/Plugins section)
-3. Add a new connector with:
-   - **MCP Endpoint:** `https://your-tunnel-url/mcp`
-   - **Auth type:** OAuth 2.0
-4. ChatGPT will discover the OAuth server via `/.well-known/oauth-protected-resource`
-5. On first use, you'll be redirected to LinkedIn to authorize the app
+Anyone can self-onboard:
+1. Share your tunnel URL
+2. They visit the landing page → "Connect Your LinkedIn"
+3. They authorize → get their own JWT token from `/routine/token`
+4. They set up their own scheduled tasks
+
+All users are stored in `.users.json`. View all connected users:
+```
+GET /admin/users?secret=YOUR_ADMIN_SECRET
+```
 
 ---
 
-## Available Tools
+## Security
 
-| Tool | Description |
-|------|-------------|
-| `getProfile` | Returns your LinkedIn name, email, and headline |
-| `postUpdate` | Posts a text update to your LinkedIn feed (1–3000 characters) |
+- `LINKEDIN_CLIENT_SECRET` never logged or exposed in responses
+- `sanitizeErrors` middleware redacts secrets from all error output
+- CSRF state uses `timingSafeEqual` (not `===`)
+- Session cookies: HttpOnly, SameSite=Lax
+- Git commands use `spawnSync` with args array (no shell injection)
+- Origin guard validates all incoming requests
+- JWT signed with HS256 using Node built-in `crypto`
 
 ---
 
 ## Development
 
 ```bash
-npm run dev        # Start with hot reload (tsx watch)
-npm run build      # Compile to dist/
-npm run typecheck  # TypeScript type check only
-npm test           # Run all tests
+npm run dev       # watch mode
+npm test          # vitest (50 tests)
+npm run build     # tsup bundle
+npm run lint      # eslint
+```
+
+### Project structure
+
+```
+src/
+├── index.ts                  # Entry point — mounts all routes
+├── config.ts                 # Env validation + exports
+├── auth/
+│   ├── cookie.ts             # HMAC-signed session cookies
+│   ├── jwt.ts                # HS256 JWT sign/verify (Node crypto)
+│   ├── linkedin.ts           # LinkedIn OAuth helpers
+│   ├── session.ts            # In-memory session store
+│   ├── session-persist.ts    # .sessions.json persistence
+│   └── user-registry.ts      # Multi-user registry (.users.json)
+├── routes/
+│   ├── auth.ts               # /auth/* — browser OAuth flow
+│   ├── oauth.ts              # /oauth/* — ChatGPT OAuth AS
+│   ├── mcp.ts                # /mcp — MCP Streamable HTTP
+│   ├── routine.ts            # /routine/* — scheduled HTTP endpoints
+│   ├── well-known.ts         # /.well-known/* — discovery docs
+│   ├── landing.ts            # / — onboarding landing page
+│   └── admin.ts              # /admin/* — user dashboard
+├── linkedin/
+│   └── client.ts             # LinkedIn API client (Posts API 2025)
+├── mcp/
+│   └── server.ts             # MCP tool registration
+├── tools/
+│   ├── get-profile.ts
+│   ├── post-update.ts
+│   ├── post-ai-news.ts
+│   ├── post-thought-leadership.ts
+│   ├── post-weekly-roundup.ts
+│   ├── post-article.ts
+│   ├── search-jobs.ts
+│   └── get-recent-commits.ts
+└── middleware/
+    ├── require-auth.ts
+    └── sanitize-errors.ts
 ```
 
 ---
 
-## Troubleshooting
+## Environment variables reference
 
-**"redirect_uri_mismatch" from LinkedIn**
-The redirect URI in your `.env` doesn't exactly match what's registered in LinkedIn Developer Portal. Check for:
-- Trailing slashes (LinkedIn is exact-match)
-- HTTP vs HTTPS
-- The path must be `/auth/callback`
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `LINKEDIN_CLIENT_ID` | ✅ | LinkedIn app client ID |
+| `LINKEDIN_CLIENT_SECRET` | ✅ | LinkedIn app client secret |
+| `SESSION_SECRET` | ✅ | Min 32 chars — signs JWTs and session cookies |
+| `PORT` | — | HTTP port (default: 3000) |
+| `SERVER_URL` | ✅ | Your public HTTPS URL (tunnel or domain) |
+| `LINKEDIN_REDIRECT_URI` | ✅ | Must be `SERVER_URL/auth/callback` |
+| `ALLOWED_ORIGINS` | — | Comma-separated CORS origins (default: `https://chatgpt.com`) |
+| `ADMIN_SECRET` | — | Enables `/admin/users` endpoint |
 
-**"Invalid scope" / 401 on login**
-Your LinkedIn app doesn't have the required products approved. Ensure both **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** are approved under Products.
+---
 
-**Tunnel URL changed (ngrok free)**
-Update `LINKEDIN_REDIRECT_URI` and `SERVER_URL` in `.env`, then update the redirect URI in LinkedIn Developer Portal, then restart the server.
+## License
 
-**"Not authenticated" error in ChatGPT**
-Visit `https://your-tunnel-url/auth/login` directly in your browser to initiate the LinkedIn OAuth flow. After approving, return to ChatGPT.
-
-**ChatGPT can't connect to MCP server**
-- Confirm the tunnel is running and `https://your-tunnel-url/health` returns `{"status":"ok"}`
-- Confirm the MCP endpoint is `/mcp` (not `/sse`)
-- Check `ALLOWED_ORIGINS` in `.env` includes `https://chat.openai.com` and `https://chatgpt.com`
+MIT — build on it, sell it, ship it.
