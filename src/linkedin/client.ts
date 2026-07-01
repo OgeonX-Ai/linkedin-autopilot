@@ -58,10 +58,14 @@ export interface LinkedInPost {
 }
 
 export class LinkedInClient {
-  private async request(url: string, options: RequestInit): Promise<Response> {
+  private async request(
+    url: string,
+    accessToken: string,
+    options: RequestInit = {},
+  ): Promise<Response> {
     let response: Response;
     try {
-      response = await fetch(url, options);
+      response = await linkedinFetch(url, accessToken, options);
     } catch {
       throw new LinkedInApiError(
         null,
@@ -75,14 +79,11 @@ export class LinkedInClient {
   }
 
   async getProfile(accessToken: string): Promise<LinkedInProfile> {
-    const response = await this.request("https://api.linkedin.com/v2/userinfo", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "LinkedIn-Version": LINKEDIN_VERSION,
-        "X-Restli-Protocol-Version": "2.0.0",
-      },
-    });
+    const response = await this.request(
+      "https://api.linkedin.com/v2/userinfo",
+      accessToken,
+      { method: "GET" },
+    );
     const data = (await response.json()) as Record<string, unknown>;
     return {
       sub: String(data["sub"] ?? ""),
@@ -111,16 +112,15 @@ export class LinkedInClient {
       },
     };
 
-    const response = await this.request("https://api.linkedin.com/v2/ugcPosts", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "LinkedIn-Version": LINKEDIN_VERSION,
-        "X-Restli-Protocol-Version": "2.0.0",
-        "Content-Type": "application/json",
+    const response = await this.request(
+      "https://api.linkedin.com/v2/ugcPosts",
+      accessToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    });
+    );
 
     // LinkedIn 201: post URN is in the X-RestLi-Id response header
     const postId = response.headers.get("X-RestLi-Id") ?? "";

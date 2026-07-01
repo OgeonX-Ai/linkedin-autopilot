@@ -7,10 +7,7 @@ export const originGuard: MiddlewareHandler = async (c, next) => {
   // Allow requests with no Origin header (direct API calls, curl, health checks)
   // Block requests with an Origin that is not in the allowlist
   if (origin !== undefined && !config.ALLOWED_ORIGINS.includes(origin)) {
-    return c.json(
-      { error: `Origin not allowed: ${origin}` },
-      403
-    );
+    return c.json({ error: "Forbidden" }, 403);
   }
 
   return await next();

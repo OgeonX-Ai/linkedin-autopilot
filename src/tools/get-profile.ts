@@ -1,11 +1,5 @@
 import { LinkedInClient, LinkedInApiError } from "../linkedin/client.js";
 
-export const getProfileSchema = {
-  type: "object" as const,
-  properties: {} as Record<string, never>,
-  required: [] as string[],
-};
-
 export async function getProfileHandler(
   _args: Record<string, unknown>,
   session: { accessToken?: string },

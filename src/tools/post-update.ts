@@ -1,16 +1,5 @@
 import { LinkedInClient, LinkedInApiError } from "../linkedin/client.js";
 
-export const postUpdateSchema = {
-  type: "object" as const,
-  properties: {
-    text: {
-      type: "string" as const,
-      description: "The text content of the LinkedIn post (max 3000 characters)",
-    },
-  },
-  required: ["text"] as string[],
-};
-
 export async function postUpdateHandler(
   args: { text?: string },
   session: { accessToken?: string; linkedinSub?: string },

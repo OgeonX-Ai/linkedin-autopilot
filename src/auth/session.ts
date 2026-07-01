@@ -24,3 +24,16 @@ export interface SessionData {
  * Replace with Redis or SQLite for production / multi-process deployments.
  */
 export const sessionStore = new Map<string, SessionData>();
+
+/** Purge sessions whose tokens have been expired for more than 1 hour. */
+function purgeExpiredSessions(): void {
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  for (const [id, data] of sessionStore) {
+    if (data.expiresAt > 0 && data.expiresAt < cutoff) {
+      sessionStore.delete(id);
+    }
+  }
+}
+
+// Run cleanup every 15 minutes. unref() so it doesn't keep the process alive.
+const _cleanupTimer = setInterval(purgeExpiredSessions, 15 * 60 * 1000).unref();
