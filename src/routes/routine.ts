@@ -13,6 +13,7 @@ import { postThoughtLeadershipHandler } from "../tools/post-thought-leadership.j
 import { postWeeklyRoundupHandler } from "../tools/post-weekly-roundup.js";
 import { postArticleHandler } from "../tools/post-article.js";
 import { searchJobsHandler } from "../tools/search-jobs.js";
+import { updateCompanyPageHandler } from "../tools/update-company-page.js";
 import { config } from "../config.js";
 import crypto from "node:crypto";
 
@@ -46,7 +47,21 @@ function resolveRoutineSession(authHeader: string | undefined): { accessToken?: 
     }
   }
 
-  // X-API-Key header (alternative to Bearer for Google)
+  // X-API-Key header without a Bearer prefix: treat the raw key value as an API key
+  // (callers normalise to "Bearer <key>" before calling, so this is a safety net)
+  if (config.apiKeys.length > 0) {
+    const rawKey = authHeader;
+    const keyBuf = Buffer.from(rawKey);
+    const matched = config.apiKeys.some((k) => {
+      const kb = Buffer.from(k);
+      return kb.length === keyBuf.length && crypto.timingSafeEqual(kb, keyBuf);
+    });
+    if (matched) {
+      for (const session of sessionStore.values()) {
+        if (session.accessToken && session.expiresAt > Date.now()) return session;
+      }
+    }
+  }
   return null;
 }
 
@@ -77,57 +92,42 @@ routineRoutes.get("/token", (c) => {
   });
 });
 
+/** POST /routine/post-ai-news — daily AI headline post */
 routineRoutes.post("/post-ai-news", async (c) => {
-  const authHeader = c.req.header("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
+  const authHeader = c.req.header("authorization") ?? (c.req.header("x-api-key") ? `Bearer ${c.req.header("x-api-key")}` : undefined);
+  const session = resolveRoutineSession(authHeader);
+  if (!session?.accessToken || !session.linkedinSub) {
     return c.json({ error: "Unauthorized" }, 401);
   }
-
-  const claims = verifyJwt(authHeader.slice(7));
-  if (!claims) {
-    return c.json({ error: "Invalid or expired token" }, 401);
-  }
-
-  const session = sessionStore.get(claims.sub);
-  if (!session?.accessToken || !session.linkedinSub) {
-    return c.json({ error: "No active LinkedIn session — please re-authenticate at /oauth/authorize" }, 401);
-  }
-
   const result = await postAINewsHandler({}, {
     accessToken: session.accessToken,
     linkedinSub: session.linkedinSub,
   });
-
   return c.json({ ok: !result.isError, message: result.content[0]?.text ?? "" });
 });
 
 /** POST /routine/post-thought-leadership — Wednesday engagement post */
 routineRoutes.post("/post-thought-leadership", async (c) => {
-  const authHeader = c.req.header("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
-  const claims = verifyJwt(authHeader.slice(7));
-  if (!claims) return c.json({ error: "Invalid or expired token" }, 401);
-  const session = sessionStore.get(claims.sub);
-  if (!session?.accessToken || !session.linkedinSub) return c.json({ error: "No active session" }, 401);
+  const authHeader = c.req.header("authorization") ?? (c.req.header("x-api-key") ? `Bearer ${c.req.header("x-api-key")}` : undefined);
+  const session = resolveRoutineSession(authHeader);
+  if (!session?.accessToken || !session.linkedinSub) return c.json({ error: "Unauthorized" }, 401);
   const result = await postThoughtLeadershipHandler({}, { accessToken: session.accessToken, linkedinSub: session.linkedinSub });
   return c.json({ ok: !result.isError, message: result.content[0]?.text ?? "" });
 });
 
 /** POST /routine/post-weekly-roundup — Friday roundup */
 routineRoutes.post("/post-weekly-roundup", async (c) => {
-  const authHeader = c.req.header("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
-  const claims = verifyJwt(authHeader.slice(7));
-  if (!claims) return c.json({ error: "Invalid or expired token" }, 401);
-  const session = sessionStore.get(claims.sub);
-  if (!session?.accessToken || !session.linkedinSub) return c.json({ error: "No active session" }, 401);
+  const authHeader = c.req.header("authorization") ?? (c.req.header("x-api-key") ? `Bearer ${c.req.header("x-api-key")}` : undefined);
+  const session = resolveRoutineSession(authHeader);
+  if (!session?.accessToken || !session.linkedinSub) return c.json({ error: "Unauthorized" }, 401);
   const result = await postWeeklyRoundupHandler({}, { accessToken: session.accessToken, linkedinSub: session.linkedinSub });
   return c.json({ ok: !result.isError, message: result.content[0]?.text ?? "" });
 });
 
 /** POST /routine/post-article — long-form article with optional URL preview */
 routineRoutes.post("/post-article", async (c) => {
-  const session = resolveRoutineSession(c.req.header("authorization") ?? c.req.header("x-api-key") ? `Bearer ${c.req.header("x-api-key")}` : undefined);
+  const authHeader = c.req.header("authorization") ?? (c.req.header("x-api-key") ? `Bearer ${c.req.header("x-api-key")}` : undefined);
+  const session = resolveRoutineSession(authHeader);
   if (!session?.accessToken || !session.linkedinSub) return c.json({ error: "Unauthorized" }, 401);
   const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
   const result = await postArticleHandler(
@@ -139,12 +139,22 @@ routineRoutes.post("/post-article", async (c) => {
 
 /** POST /routine/search-jobs — find Finnish + remote jobs */
 routineRoutes.post("/search-jobs", async (c) => {
-  const session = resolveRoutineSession(c.req.header("authorization") ?? c.req.header("x-api-key") ? `Bearer ${c.req.header("x-api-key")}` : undefined);
+  const authHeader = c.req.header("authorization") ?? (c.req.header("x-api-key") ? `Bearer ${c.req.header("x-api-key")}` : undefined);
+  const session = resolveRoutineSession(authHeader);
   if (!session) return c.json({ error: "Unauthorized" }, 401);
   const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
   const result = await searchJobsHandler(
     { keyword: body["keyword"] as string | undefined, location: body["location"] as string | undefined, remote: Boolean(body["remote"]) },
     { accessToken: session.accessToken },
   );
+  return c.json({ ok: !result.isError, message: result.content[0]?.text ?? "" });
+});
+
+/** POST /routine/update-company-page — refresh OgeonX AI LinkedIn company page profile */
+routineRoutes.post("/update-company-page", async (c) => {
+  const authHeader = c.req.header("authorization") ?? (c.req.header("x-api-key") ? `Bearer ${c.req.header("x-api-key")}` : undefined);
+  const session = resolveRoutineSession(authHeader);
+  if (!session?.accessToken) return c.json({ error: "Unauthorized" }, 401);
+  const result = await updateCompanyPageHandler({ accessToken: session.accessToken });
   return c.json({ ok: !result.isError, message: result.content[0]?.text ?? "" });
 });

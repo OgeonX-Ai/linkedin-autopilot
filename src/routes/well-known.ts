@@ -23,3 +23,19 @@ wellKnownRoutes.get("/oauth-authorization-server", (c) => {
     code_challenge_methods_supported: [],
   });
 });
+
+// OpenID Connect Discovery (RFC 8414 / OIDC Core §4)
+// Some clients (Google Agentspace, certain OAuth libraries) probe this URL
+wellKnownRoutes.get("/openid-configuration", (c) => {
+  return c.json({
+    issuer: config.SERVER_URL,
+    authorization_endpoint: `${config.SERVER_URL}/oauth/authorize`,
+    token_endpoint: `${config.SERVER_URL}/oauth/token`,
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code"],
+    subject_types_supported: ["public"],
+    id_token_signing_alg_values_supported: ["HS256"],
+    scopes_supported: ["openid", "profile", "email"],
+    code_challenge_methods_supported: [],
+  });
+});

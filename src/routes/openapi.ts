@@ -35,6 +35,15 @@ openapiRoutes.get("/openapi.json", (c) => {
           description: "JWT issued by GET /routine/token after LinkedIn OAuth",
         },
       },
+      schemas: {
+        RoutineResult: {
+          type: "object",
+          properties: {
+            ok: { type: "boolean" },
+            message: { type: "string" },
+          },
+        },
+      },
     },
     paths: {
       "/routine/post-ai-news": {
@@ -106,6 +115,19 @@ openapiRoutes.get("/openapi.json", (c) => {
           },
         },
       },
+      "/routine/update-company-page": {
+        post: {
+          operationId: "updateCompanyPage",
+          summary: "Update OgeonX AI LinkedIn company page profile",
+          description: "Sets the company About description (EN + FI), tagline (EN + FI), specialties, and website URL via the LinkedIn API. Requires rw_organization_admin scope.",
+          responses: {
+            "200": {
+              description: "Update result",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/RoutineResult" } } },
+            },
+          },
+        },
+      },
       "/routine/search-jobs": {
         post: {
           operationId: "searchJobs",
@@ -156,17 +178,6 @@ openapiRoutes.get("/openapi.json", (c) => {
                 },
               },
             },
-          },
-        },
-      },
-    },
-    "x-components": {
-      schemas: {
-        RoutineResult: {
-          type: "object",
-          properties: {
-            ok: { type: "boolean" },
-            message: { type: "string" },
           },
         },
       },
