@@ -19,8 +19,20 @@ import crypto from "node:crypto";
 
 export const routineRoutes = new Hono();
 
+interface RoutineSession {
+  accessToken?: string;
+  linkedinSub?: string;
+}
+
+export function toPublishingSession(session: RoutineSession): RoutineSession & { orgId?: string } {
+  return {
+    ...session,
+    ...(config.linkedinOrgId ? { orgId: config.linkedinOrgId } : {}),
+  };
+}
+
 /** Resolve session from Bearer JWT or API key — shared by all routine endpoints. */
-function resolveRoutineSession(authHeader: string | undefined): { accessToken?: string; linkedinSub?: string } | null {
+function resolveRoutineSession(authHeader: string | undefined): RoutineSession | null {
   if (!authHeader) return null;
 
   // Bearer JWT (Claude routines / ChatGPT)
@@ -96,13 +108,10 @@ routineRoutes.get("/token", (c) => {
 routineRoutes.post("/post-ai-news", async (c) => {
   const authHeader = c.req.header("authorization") ?? (c.req.header("x-api-key") ? `Bearer ${c.req.header("x-api-key")}` : undefined);
   const session = resolveRoutineSession(authHeader);
-  if (!session?.accessToken || !session.linkedinSub) {
+  if (!session?.accessToken || (!session.linkedinSub && !config.linkedinOrgId)) {
     return c.json({ error: "Unauthorized" }, 401);
   }
-  const result = await postAINewsHandler({}, {
-    accessToken: session.accessToken,
-    linkedinSub: session.linkedinSub,
-  });
+  const result = await postAINewsHandler({}, toPublishingSession(session));
   return c.json({ ok: !result.isError, message: result.content[0]?.text ?? "" });
 });
 
@@ -110,8 +119,8 @@ routineRoutes.post("/post-ai-news", async (c) => {
 routineRoutes.post("/post-thought-leadership", async (c) => {
   const authHeader = c.req.header("authorization") ?? (c.req.header("x-api-key") ? `Bearer ${c.req.header("x-api-key")}` : undefined);
   const session = resolveRoutineSession(authHeader);
-  if (!session?.accessToken || !session.linkedinSub) return c.json({ error: "Unauthorized" }, 401);
-  const result = await postThoughtLeadershipHandler({}, { accessToken: session.accessToken, linkedinSub: session.linkedinSub });
+  if (!session?.accessToken || (!session.linkedinSub && !config.linkedinOrgId)) return c.json({ error: "Unauthorized" }, 401);
+  const result = await postThoughtLeadershipHandler({}, toPublishingSession(session));
   return c.json({ ok: !result.isError, message: result.content[0]?.text ?? "" });
 });
 
@@ -119,8 +128,8 @@ routineRoutes.post("/post-thought-leadership", async (c) => {
 routineRoutes.post("/post-weekly-roundup", async (c) => {
   const authHeader = c.req.header("authorization") ?? (c.req.header("x-api-key") ? `Bearer ${c.req.header("x-api-key")}` : undefined);
   const session = resolveRoutineSession(authHeader);
-  if (!session?.accessToken || !session.linkedinSub) return c.json({ error: "Unauthorized" }, 401);
-  const result = await postWeeklyRoundupHandler({}, { accessToken: session.accessToken, linkedinSub: session.linkedinSub });
+  if (!session?.accessToken || (!session.linkedinSub && !config.linkedinOrgId)) return c.json({ error: "Unauthorized" }, 401);
+  const result = await postWeeklyRoundupHandler({}, toPublishingSession(session));
   return c.json({ ok: !result.isError, message: result.content[0]?.text ?? "" });
 });
 
@@ -128,11 +137,11 @@ routineRoutes.post("/post-weekly-roundup", async (c) => {
 routineRoutes.post("/post-article", async (c) => {
   const authHeader = c.req.header("authorization") ?? (c.req.header("x-api-key") ? `Bearer ${c.req.header("x-api-key")}` : undefined);
   const session = resolveRoutineSession(authHeader);
-  if (!session?.accessToken || !session.linkedinSub) return c.json({ error: "Unauthorized" }, 401);
+  if (!session?.accessToken || (!session.linkedinSub && !config.linkedinOrgId)) return c.json({ error: "Unauthorized" }, 401);
   const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
   const result = await postArticleHandler(
     { title: String(body["title"] ?? ""), body: String(body["body"] ?? ""), topic: body["topic"] as string | undefined, sourceUrl: body["sourceUrl"] as string | undefined },
-    { accessToken: session.accessToken, linkedinSub: session.linkedinSub },
+    toPublishingSession(session),
   );
   return c.json({ ok: !result.isError, message: result.content[0]?.text ?? "" });
 });

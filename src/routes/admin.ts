@@ -4,6 +4,7 @@
  */
 
 import { Hono } from "hono";
+import crypto from "node:crypto";
 import { getAllUsers } from "../auth/user-registry.js";
 import { sessionStore } from "../auth/session.js";
 import { updateCompanyPageHandler } from "../tools/update-company-page.js";
@@ -16,7 +17,12 @@ function checkAdminSecret(c: Parameters<typeof adminRoutes.get>[1] extends (c: i
   const adminSecret = process.env["ADMIN_SECRET"] ?? "";
   if (!adminSecret) return false;
   const provided = c.req.query("secret") ?? "";
-  return provided === adminSecret && provided !== "";
+  if (!provided) return false;
+  // Timing-safe comparison to prevent secret enumeration via timing attacks
+  const secretBuf = Buffer.from(adminSecret, "utf8");
+  const providedBuf = Buffer.from(provided, "utf8");
+  if (secretBuf.length !== providedBuf.length) return false;
+  return crypto.timingSafeEqual(secretBuf, providedBuf);
 }
 
 /**
@@ -54,7 +60,12 @@ adminRoutes.get("/users", (c) => {
   }
 
   const provided = c.req.query("secret") ?? "";
-  if (!provided || provided !== adminSecret) {
+  const secretBuf2 = Buffer.from(adminSecret, "utf8");
+  const providedBuf2 = Buffer.from(provided, "utf8");
+  const validSecret = provided.length > 0 &&
+    secretBuf2.length === providedBuf2.length &&
+    crypto.timingSafeEqual(secretBuf2, providedBuf2);
+  if (!validSecret) {
     return c.json({ error: "Forbidden" }, 403);
   }
 

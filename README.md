@@ -28,6 +28,7 @@ Built on the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) â€
 | `postArticle` | Long-form article with optional rich URL preview |
 | `getRecentCommits` | Read your git history, compose a dev update post |
 | `searchJobs` | Search Finnish + remote jobs (Indeed FI + Remotive) |
+| `updateCompanyPage` | Update OgeonX AI LinkedIn company page (description, tagline, specialties, URL) |
 
 ---
 
@@ -162,6 +163,7 @@ Use the token as `Authorization: Bearer <token>` when calling routine endpoints:
 | `POST /routine/post-ai-news` | Mon/Tue/Thu 10:00 EET |
 | `POST /routine/post-thought-leadership` | Wed 11:00 EET |
 | `POST /routine/post-weekly-roundup` | Fri 10:00 EET |
+| `POST /routine/update-company-page` | On demand / monthly |
 
 ### Claude Desktop scheduled tasks
 

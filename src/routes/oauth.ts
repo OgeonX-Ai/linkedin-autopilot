@@ -19,27 +19,114 @@ import { config } from "../config.js";
 
 export const oauthRoutes = new Hono();
 
-// Pending ChatGPT auth requests: authReqId → { redirectUri, state, codeVerifier? }
-export const pendingAuthRequests = new Map<string, { redirectUri: string; chatgptState: string }>();
+interface PendingAuthRequest {
+  redirectUri: string;
+  chatgptState: string;
+  expiresAt: number;
+  codeChallenge?: string;
+}
 
-// Short-lived auth codes issued after LinkedIn callback: code → sessionId
-export const authCodes = new Map<string, { sessionId: string; expiresAt: number }>();
+interface AuthorizationCodeEntry {
+  sessionId: string;
+  expiresAt: number;
+  codeChallenge?: string;
+}
+
+// Pending client auth requests: authReqId → callback state + optional PKCE challenge.
+export const pendingAuthRequests = new Map<string, PendingAuthRequest>();
+
+// Short-lived auth codes issued after LinkedIn callback: code → session + PKCE challenge.
+export const authCodes = new Map<string, AuthorizationCodeEntry>();
+
+// Purge stale pending requests and expired auth codes every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, req] of pendingAuthRequests) {
+    if (req.expiresAt < now) pendingAuthRequests.delete(id);
+  }
+  for (const [code, entry] of authCodes) {
+    if (entry.expiresAt < now) authCodes.delete(code);
+  }
+}, 5 * 60 * 1000).unref();
 
 /**
  * GET /oauth/authorize
  * ChatGPT redirects users here. We chain into LinkedIn OAuth.
  */
+// Trusted redirect_uri prefixes for the ChatGPT / Claude OAuth AS flow.
+// Any redirect_uri presented at /oauth/authorize must start with one of these.
+// Add your AI platform's callback base URL to ALLOWED_ORIGINS (env var) or hardcode here.
+const TRUSTED_REDIRECT_ORIGINS = [
+  "https://chatgpt.com",
+  "https://chat.openai.com",
+  "https://claude.ai",
+];
+
+export function isTrustedRedirectUri(uri: string): boolean {
+  try {
+    const parsed = new URL(uri);
+    if (parsed.hash || parsed.username || parsed.password) return false;
+
+    // RFC 8252 loopback redirects use an ephemeral local port. Codex uses 127.0.0.1.
+    const loopbackHosts = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
+    if (parsed.protocol === "http:" && loopbackHosts.has(parsed.hostname)) {
+      return true;
+    }
+
+    if (parsed.protocol !== "https:") return false;
+    const origin = parsed.origin;
+    if (TRUSTED_REDIRECT_ORIGINS.some((t) => origin === t)) return true;
+    if (config.allowedOrigins?.some((o) => origin === o)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export function verifyPkceCodeChallenge(
+  codeVerifier: string,
+  expectedChallenge: string,
+): boolean {
+  const actualChallenge = crypto
+    .createHash("sha256")
+    .update(codeVerifier, "ascii")
+    .digest("base64url");
+  const actual = Buffer.from(actualChallenge, "ascii");
+  const expected = Buffer.from(expectedChallenge, "ascii");
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
 oauthRoutes.get("/authorize", (c) => {
   const redirectUri = c.req.query("redirect_uri") ?? "";
   const chatgptState = c.req.query("state") ?? "";
+  const codeChallenge = c.req.query("code_challenge");
+  const codeChallengeMethod = c.req.query("code_challenge_method");
 
   if (!redirectUri) {
     return c.json({ error: "invalid_request", error_description: "redirect_uri required" }, 400);
   }
 
-  // Store the ChatGPT request so we can complete it after LinkedIn callback
+  // Validate redirect_uri against trusted origins to prevent open-redirect abuse
+  if (!isTrustedRedirectUri(redirectUri)) {
+    return c.json({ error: "invalid_request", error_description: "redirect_uri is not allowed" }, 400);
+  }
+
+  const isLoopbackRedirect = new URL(redirectUri).protocol === "http:";
+  if (isLoopbackRedirect && (!codeChallenge || codeChallengeMethod !== "S256")) {
+    return c.json({ error: "invalid_request", error_description: "S256 PKCE is required for loopback redirects" }, 400);
+  }
+  if (codeChallenge && (codeChallengeMethod !== "S256" || !/^[A-Za-z0-9_-]{43}$/.test(codeChallenge))) {
+    return c.json({ error: "invalid_request", error_description: "Invalid PKCE code challenge" }, 400);
+  }
+
+  // Store the ChatGPT request so we can complete it after LinkedIn callback (10-min TTL)
   const authReqId = crypto.randomUUID();
-  pendingAuthRequests.set(authReqId, { redirectUri, chatgptState });
+  pendingAuthRequests.set(authReqId, {
+    redirectUri,
+    chatgptState,
+    expiresAt: Date.now() + 10 * 60 * 1000,
+    ...(codeChallenge ? { codeChallenge } : {}),
+  });
 
   // Encode authReqId into the LinkedIn state so the callback can retrieve it
   const linkedinState = generateState() + "." + authReqId;
@@ -50,7 +137,7 @@ oauthRoutes.get("/authorize", (c) => {
     response_type: "code",
     client_id: config.LINKEDIN_CLIENT_ID,
     redirect_uri: oauthCallbackUri,
-    scope: "openid profile email w_member_social w_organization_social r_organization_social rw_organization_admin",
+    scope: config.linkedinOauthScopes.join(" "),
     state: linkedinState,
   });
   const linkedinAuthUrl = `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`;
@@ -99,7 +186,11 @@ oauthRoutes.get("/callback", async (c) => {
 
     // Issue a short-lived code to ChatGPT
     const authCode = crypto.randomBytes(32).toString("hex");
-    authCodes.set(authCode, { sessionId, expiresAt: Date.now() + 5 * 60 * 1000 });
+    authCodes.set(authCode, {
+      sessionId,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+      ...(pending.codeChallenge ? { codeChallenge: pending.codeChallenge } : {}),
+    });
 
     const redirectUrl = new URL(pending.redirectUri);
     redirectUrl.searchParams.set("code", authCode);
@@ -127,6 +218,7 @@ oauthRoutes.post("/token", async (c) => {
 
   const grantType = body["grant_type"];
   const code = body["code"];
+  const codeVerifier = body["code_verifier"];
 
   if (grantType !== "authorization_code" || !code) {
     return c.json({ error: "unsupported_grant_type" }, 400);
@@ -138,6 +230,13 @@ oauthRoutes.post("/token", async (c) => {
     return c.json({ error: "invalid_grant" }, 400);
   }
   authCodes.delete(code);
+
+  if (
+    pending.codeChallenge &&
+    (!codeVerifier || !verifyPkceCodeChallenge(codeVerifier, pending.codeChallenge))
+  ) {
+    return c.json({ error: "invalid_grant" }, 400);
+  }
 
   const jwt = signJwt(pending.sessionId, 3600);
   return c.json({

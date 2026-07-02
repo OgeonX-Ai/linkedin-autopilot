@@ -101,6 +101,24 @@ describe("validateConfig()", () => {
     expect(cfg.PORT).toBe(3000);
   });
 
+  test("organization scopes are opt-in", () => {
+    setEnv({ LINKEDIN_OAUTH_SCOPES: undefined });
+    expect(validateConfig().linkedinOauthScopes).toEqual([
+      "openid",
+      "profile",
+      "email",
+      "w_member_social",
+    ]);
+
+    setEnv({
+      LINKEDIN_OAUTH_SCOPES:
+        "openid profile email w_member_social w_organization_social",
+    });
+    expect(validateConfig().linkedinOauthScopes).toContain(
+      "w_organization_social",
+    );
+  });
+
   test("error message for short SESSION_SECRET does not contain the secret value", () => {
     const shortSecret = "short-but-visible-value-here";
     setEnv({ SESSION_SECRET: shortSecret });

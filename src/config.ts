@@ -12,6 +12,7 @@ export interface Config {
   apiKeys: string[];       // pre-shared keys for Google / n8n / Zapier / any HTTP client
   adminSecret: string;
   linkedinOrgId?: string;
+  linkedinOauthScopes: string[];
   // Uppercase aliases kept for backward compatibility with existing callers
   SESSION_SECRET: string;
   LINKEDIN_CLIENT_ID: string;
@@ -61,6 +62,12 @@ export function validateConfig(): Config {
 
   const adminSecret = process.env.ADMIN_SECRET ?? "";
   const linkedinOrgId = process.env.LINKEDIN_ORG_ID || undefined;
+  const linkedinOauthScopes = (
+    process.env.LINKEDIN_OAUTH_SCOPES ?? "openid profile email w_member_social"
+  )
+    .split(/[\s,]+/)
+    .map((scope) => scope.trim())
+    .filter(Boolean);
 
   return {
     // camelCase (spec)
@@ -74,6 +81,7 @@ export function validateConfig(): Config {
     apiKeys,
     adminSecret,
     ...(linkedinOrgId !== undefined ? { linkedinOrgId } : {}),
+    linkedinOauthScopes,
     // UPPER_SNAKE_CASE aliases (backward compat with existing callers)
     SESSION_SECRET: sessionSecret,
     LINKEDIN_CLIENT_ID: linkedinClientId,

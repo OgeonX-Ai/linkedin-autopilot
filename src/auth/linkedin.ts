@@ -16,9 +16,6 @@ const AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const USERINFO_URL = "https://api.linkedin.com/v2/userinfo";
 
-// ONLY these scopes — old scopes (r_liteprofile, r_emailaddress) return 401 immediately
-const SCOPES = ["openid", "profile", "email", "w_member_social", "w_organization_social", "r_organization_social", "rw_organization_admin"] as const;
-
 export class OAuthError extends Error {
   constructor(
     public readonly code: string,
@@ -38,7 +35,7 @@ export function buildAuthUrl(state: string): string {
     response_type: "code",
     client_id: config.LINKEDIN_CLIENT_ID,
     redirect_uri: config.LINKEDIN_REDIRECT_URI,
-    scope: SCOPES.join(" "),
+    scope: config.linkedinOauthScopes.join(" "),
     state,
   });
   return `${AUTH_URL}?${params.toString()}`;

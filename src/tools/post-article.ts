@@ -46,8 +46,15 @@ function formatArticle(input: ArticleInput): string {
 
   // Trim to LinkedIn's 3000-char limit
   if (sections.length <= 3000) return sections;
-  const overflow = sections.length - 3000 + 4; // 4 for "...\n"
-  return sections.slice(0, input.body.length - overflow) + "...\n\n---\n" + hashtags;
+  const suffix = "...\n\n---\n" + hashtags;
+  // Find where the body starts inside sections so we know how many body chars to keep
+  const bodyStart = `📝 ${input.title}\n\n`.length;
+  const maxBodyLen = 3000 - bodyStart - suffix.length;
+  if (maxBodyLen <= 0) {
+    // Edge case: title + hashtags alone exceed the limit — just hard-truncate
+    return sections.slice(0, 3000);
+  }
+  return `📝 ${input.title}\n\n${input.body.slice(0, maxBodyLen)}${suffix}`;
 }
 
 export async function postArticleHandler(
