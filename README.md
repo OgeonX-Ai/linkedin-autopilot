@@ -163,6 +163,8 @@ Use the token as `Authorization: Bearer <token>` when calling routine endpoints:
 | `POST /routine/post-ai-news` | Mon/Tue/Thu 10:00 EET |
 | `POST /routine/post-thought-leadership` | Wed 11:00 EET |
 | `POST /routine/post-weekly-roundup` | Fri 10:00 EET |
+| `POST /routine/post-article` | On demand |
+| `POST /routine/search-jobs` | On demand |
 | `POST /routine/update-company-page` | On demand / monthly |
 
 ### Claude Desktop scheduled tasks
@@ -231,7 +233,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
    - OpenAPI URL: `https://YOUR_TUNNEL_URL/openapi.json`
    - Auth: API Key → Header `X-API-Key` → paste your key
 
-Agentspace can then trigger all 5 routine endpoints via natural language.
+Agentspace can then trigger all 6 routine endpoints via natural language.
 
 ---
 
@@ -266,7 +268,7 @@ GET /admin/users?secret=YOUR_ADMIN_SECRET
 
 ```bash
 npm run dev       # watch mode
-npm test          # vitest (50 tests)
+npm test          # vitest (82 tests)
 npm run build     # tsup bundle
 npm run lint      # eslint
 ```
@@ -290,6 +292,7 @@ src/
 │   ├── mcp.ts                # /mcp — MCP Streamable HTTP
 │   ├── routine.ts            # /routine/* — scheduled HTTP endpoints
 │   ├── well-known.ts         # /.well-known/* — discovery docs
+│   ├── openapi.ts            # /openapi.json — OpenAPI 3.0 spec
 │   ├── landing.ts            # / — onboarding landing page
 │   └── admin.ts              # /admin/* — user dashboard
 ├── linkedin/
@@ -304,6 +307,7 @@ src/
 │   ├── post-weekly-roundup.ts
 │   ├── post-article.ts
 │   ├── search-jobs.ts
+│   ├── update-company-page.ts
 │   └── get-recent-commits.ts
 └── middleware/
     ├── require-auth.ts
