@@ -1,4 +1,5 @@
 import { LinkedInClient, LinkedInApiError } from "../linkedin/client.js";
+import { recordPost } from "../analytics/post-history.js";
 
 export async function postUpdateHandler(
   args: { text?: string },
@@ -46,6 +47,14 @@ export async function postUpdateHandler(
 
   try {
     const post = await client.createPost(session.accessToken, authorUrn, text);
+    recordPost({
+      type: "postUpdate",
+      target: session.orgId ? "company" : "personal",
+      ownerSub: session.linkedinSub,
+      text,
+      linkedinPostId: post.postId,
+      linkedinPostUrl: post.postUrl,
+    });
     return {
       isError: false,
       content: [

@@ -27,6 +27,7 @@ landingRoutes.get("/", (c) => {
           </div>
         </div>
         <div class="connected-actions">
+          <a href="/dashboard" class="btn btn-secondary">View Dashboard</a>
           <a href="/routine/token" class="btn btn-secondary">Get API Token</a>
           <a href="/auth/logout" class="btn btn-ghost">Disconnect</a>
         </div>

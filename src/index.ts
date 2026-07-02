@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { loadSessions, saveSessions } from "./auth/session-persist.js";
 import { loadUserRegistry } from "./auth/user-registry.js";
+import { loadPostHistory } from "./analytics/post-history.js";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import type { HttpBindings } from "@hono/node-server";
@@ -15,11 +16,13 @@ import { oauthRoutes } from "./routes/oauth.js";
 import { routineRoutes } from "./routes/routine.js";
 import { landingRoutes } from "./routes/landing.js";
 import { adminRoutes } from "./routes/admin.js";
+import { dashboardRoutes } from "./routes/dashboard.js";
 import { openapiRoutes } from "./routes/openapi.js";
 
 // Load persisted data from disk (survives server restarts)
 loadSessions();
 loadUserRegistry();
+loadPostHistory();
 // Save sessions every 5 minutes and on exit
 setInterval(saveSessions, 5 * 60 * 1000).unref();
 process.on("SIGINT", () => { saveSessions(); process.exit(0); });
@@ -41,6 +44,9 @@ app.route("/", landingRoutes);
 
 // Admin dashboard
 app.route("/admin", adminRoutes);
+
+// Per-user analytics dashboard (real post history, no fabricated metrics)
+app.route("/dashboard", dashboardRoutes);
 
 // LinkedIn OAuth routes (browser flow — unauthenticated)
 app.route("/auth", authRoutes);

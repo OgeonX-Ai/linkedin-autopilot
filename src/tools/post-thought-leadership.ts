@@ -11,6 +11,7 @@
  */
 
 import { LinkedInClient, LinkedInApiError } from "../linkedin/client.js";
+import { recordPost } from "../analytics/post-history.js";
 
 const INSIGHT_FEEDS = [
   "https://techcrunch.com/category/artificial-intelligence/feed/",
@@ -131,6 +132,14 @@ export async function postThoughtLeadershipHandler(
 
   try {
     const post = await client.createPost(session.accessToken, authorUrn, text);
+    recordPost({
+      type: "postThoughtLeadership",
+      target: session.orgId ? "company" : "personal",
+      ownerSub: session.linkedinSub,
+      text,
+      linkedinPostId: post.postId,
+      linkedinPostUrl: post.postUrl,
+    });
     return {
       isError: false,
       content: [{

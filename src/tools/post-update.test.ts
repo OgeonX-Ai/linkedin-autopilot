@@ -18,6 +18,11 @@ vi.mock("../linkedin/client.js", () => {
   return { LinkedInClient, LinkedInApiError };
 });
 
+// Never touch disk from a handler test — post-history.ts persists to a real file.
+vi.mock("../analytics/post-history.js", () => ({
+  recordPost: vi.fn(),
+}));
+
 describe("postUpdateHandler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
