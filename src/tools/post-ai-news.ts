@@ -5,6 +5,7 @@
  */
 
 import { LinkedInClient, LinkedInApiError } from "../linkedin/client.js";
+import { recordPost } from "../analytics/post-history.js";
 
 const NEWS_FEEDS = [
   "https://feeds.feedburner.com/oreilly/radar",           // O'Reilly Radar
@@ -117,6 +118,14 @@ export async function postAINewsHandler(
   const client = new LinkedInClient();
   try {
     const post = await client.createPost(session.accessToken, authorUrn, text);
+    recordPost({
+      type: "postAINews",
+      target: session.orgId ? "company" : "personal",
+      ownerSub: session.linkedinSub,
+      text,
+      linkedinPostId: post.postId,
+      linkedinPostUrl: post.postUrl,
+    });
     return {
       isError: false,
       content: [{

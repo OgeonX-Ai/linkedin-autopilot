@@ -5,6 +5,7 @@
  */
 
 import { LinkedInClient, LinkedInApiError } from "../linkedin/client.js";
+import { recordPost } from "../analytics/post-history.js";
 
 const FEEDS = [
   "https://techcrunch.com/category/artificial-intelligence/feed/",
@@ -109,6 +110,14 @@ export async function postWeeklyRoundupHandler(
 
   try {
     const post = await client.createPost(session.accessToken, authorUrn, finalText);
+    recordPost({
+      type: "postWeeklyRoundup",
+      target: session.orgId ? "company" : "personal",
+      ownerSub: session.linkedinSub,
+      text: finalText,
+      linkedinPostId: post.postId,
+      linkedinPostUrl: post.postUrl,
+    });
     return {
       isError: false,
       content: [{

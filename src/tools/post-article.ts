@@ -12,6 +12,7 @@
  */
 
 import { LinkedInClient, LinkedInApiError } from "../linkedin/client.js";
+import { recordPost } from "../analytics/post-history.js";
 
 export interface ArticleInput {
   title: string;
@@ -86,6 +87,7 @@ export async function postArticleHandler(
 
   try {
     let post;
+    let textForHistory: string;
     if (sourceUrl) {
       // Use article preview (URL share) via createArticlePost
       const commentary = formatArticle({ title, body, topic: args.topic });
@@ -95,11 +97,21 @@ export async function postArticleHandler(
         commentary,
         { source: sourceUrl, title, description: body.slice(0, 200) },
       );
+      textForHistory = commentary;
     } else {
       // Fall back to long-form text post
       const text = formatArticle({ title, body, topic: args.topic });
       post = await client.createPost(session.accessToken, authorUrn, text);
+      textForHistory = text;
     }
+    recordPost({
+      type: "postArticle",
+      target: session.orgId ? "company" : "personal",
+      ownerSub: session.linkedinSub,
+      text: textForHistory,
+      linkedinPostId: post.postId,
+      linkedinPostUrl: post.postUrl,
+    });
     return {
       isError: false,
       content: [{

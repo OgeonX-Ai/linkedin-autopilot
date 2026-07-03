@@ -186,6 +186,7 @@ export function buildMcpServer(sessionId: string = ""): McpServer {
       const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
       return postUpdateHandler({ text }, {
         ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(session.linkedinSub !== undefined ? { linkedinSub: session.linkedinSub } : {}),
         ...(config.linkedinOrgId !== undefined ? { orgId: config.linkedinOrgId } : {}),
       });
     },
@@ -199,6 +200,7 @@ export function buildMcpServer(sessionId: string = ""): McpServer {
       const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
       return postAINewsHandler({}, {
         ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(session.linkedinSub !== undefined ? { linkedinSub: session.linkedinSub } : {}),
         ...(config.linkedinOrgId !== undefined ? { orgId: config.linkedinOrgId } : {}),
       });
     },
@@ -212,6 +214,7 @@ export function buildMcpServer(sessionId: string = ""): McpServer {
       const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
       return postThoughtLeadershipHandler({}, {
         ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(session.linkedinSub !== undefined ? { linkedinSub: session.linkedinSub } : {}),
         ...(config.linkedinOrgId !== undefined ? { orgId: config.linkedinOrgId } : {}),
       });
     },
@@ -225,6 +228,7 @@ export function buildMcpServer(sessionId: string = ""): McpServer {
       const session: Partial<SessionData> = sessionStore.get(sessionId) ?? {};
       return postWeeklyRoundupHandler({}, {
         ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(session.linkedinSub !== undefined ? { linkedinSub: session.linkedinSub } : {}),
         ...(config.linkedinOrgId !== undefined ? { orgId: config.linkedinOrgId } : {}),
       });
     },
@@ -248,6 +252,7 @@ export function buildMcpServer(sessionId: string = ""): McpServer {
         ...(sourceUrl !== undefined ? { sourceUrl } : {}),
       }, {
         ...(session.accessToken !== undefined ? { accessToken: session.accessToken } : {}),
+        ...(session.linkedinSub !== undefined ? { linkedinSub: session.linkedinSub } : {}),
         ...(config.linkedinOrgId !== undefined ? { orgId: config.linkedinOrgId } : {}),
       });
     },
